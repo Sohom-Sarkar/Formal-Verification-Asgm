@@ -83,10 +83,8 @@ class Elaborator:
         self.aig = AIG()
         self.warnings = []
         self._warn_sink = warn
-        # Every scope ever built, including instantiated children. Retained so
-        # that an AIG literal can be traced back to the signal that produced
-        # it - which is what lets fault localisation report a hierarchical
-        # Verilog name instead of an anonymous node id.
+        # Every scope built, children included. Lets fault localisation map an
+        # AIG node back to a hierarchical signal name instead of a node id.
         self.scopes = []
 
     def warn(self, message):
@@ -99,9 +97,8 @@ class Elaborator:
     def elaborate_top(self, top_name, input_lits=None, param_overrides=None):
         """Elaborate `top_name` as the design root.
 
-        `input_lits` optionally supplies pre-made AIG literals per input port
-        name, which is how a miter feeds one shared set of primary inputs to
-        both designs under comparison.
+        `input_lits` supplies ready-made literals per input port, which is how a
+        miter feeds one set of inputs to both designs.
         """
         if top_name not in self.modules:
             raise ElaborationError("no module named %r (have: %s)"
@@ -746,11 +743,9 @@ class Elaborator:
 
 
 def signal_names_by_node(scopes):
-    """Map AIG node id -> a readable hierarchical signal name.
+    """Map AIG node id -> hierarchical signal name.
 
-    A node is often driven by several equivalent names (structural hashing
-    merges them); the shortest, shallowest one is kept as the label because it
-    is the one a designer is most likely to recognise.
+    Structural hashing means a node often has several names; keep the shortest.
     """
     names = {}
     for scope in scopes:
@@ -1059,12 +1054,9 @@ def _mux_tree(aig, selector, source):
 def _substitute(node, genvars, local_names, suffix):
     """Rewrite one unrolled generate iteration.
 
-    Genvar references become constants, and signals declared inside the loop
-    body are renamed per iteration so each iteration gets its own wires.
-
-    Written as a returning transform rather than an in-place mutation because
-    the AST holds values inside tuples (case items, port connections) that
-    cannot be patched in place.
+    Genvars become constants and locally declared signals get a per-iteration
+    suffix. Returns a new tree rather than mutating, because case items and
+    port connections live in tuples.
     """
     from .lexer import Number
 

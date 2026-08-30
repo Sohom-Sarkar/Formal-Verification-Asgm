@@ -13,12 +13,12 @@ Run:  python benchmark.py [--max-mult-width N] [--quick]
 
 import argparse
 import sys
-import threading
 import time
 
 from eqcheck.equiv import (build_miter, check_sat, check_bdd, variable_order,
                            best_static_order, sift_order, STATIC_ORDERS)
 from eqcheck.solvers import BENCHMARK_SOLVERS
+from eqcheck.bigstack import run as run_big_stack
 
 BDD_NODE_LIMIT = 400_000
 
@@ -144,11 +144,20 @@ def experiment_ordering(report):
 
     for name, spec, impl, params in cases:
         miter = build_miter(spec, impl, param_overrides=params or {})
-        search = best_static_order(miter, node_limit=BDD_NODE_LIMIT)
-        cells = []
+
+        # Each strategy gets the full budget. best_static_order caps every
+        # attempt at the incumbent best, which is the right thing when picking
+        # a winner but makes "overflow" mean "worse than the best so far"
+        # rather than "exceeded the budget" - not what this table is asking.
+        measured = {}
         for strategy in STATIC_ORDERS:
-            value = search["per_strategy"].get(strategy)
-            cells.append("overflow" if value is None else str(value))
+            result = check_bdd(miter, order=variable_order(miter, strategy),
+                               node_limit=BDD_NODE_LIMIT)
+            measured[strategy] = None if result["aborted"] else result["peak_nodes"]
+
+        search = best_static_order(miter, node_limit=BDD_NODE_LIMIT)
+        cells = [("overflow" if measured[s] is None else str(measured[s]))
+                 for s in STATIC_ORDERS]
 
         if search["order"] is None:
             sifted_cell = "-"
@@ -156,7 +165,8 @@ def experiment_ordering(report):
         else:
             sifted = sift_order(miter, initial=search["order"],
                                 node_limit=BDD_NODE_LIMIT, max_builds=120)
-            best_cell = "%s (%d)" % (search["best"], search["peak_nodes"])
+            winner = min((v, s) for s, v in measured.items() if v)
+            best_cell = "%s (%d)" % (winner[1], winner[0])
             sifted_cell = ("%d" % sifted["peak_nodes"]
                            if sifted["peak_nodes"] is not None else "-")
         rows.append((name,) + tuple(cells) + (best_cell, sifted_cell))
@@ -289,29 +299,5 @@ def main():
     return 0
 
 
-def _entry():
-    sys.setrecursionlimit(100000)
-    box = {}
-
-    def target():
-        try:
-            box["code"] = main()
-        except BaseException as exc:                # noqa: BLE001
-            box["error"] = exc
-
-    for size in (128 * 1024 * 1024, 64 * 1024 * 1024, 32 * 1024 * 1024):
-        try:
-            threading.stack_size(size)
-            break
-        except (ValueError, RuntimeError):
-            continue
-    thread = threading.Thread(target=target)
-    thread.start()
-    thread.join()
-    if "error" in box:
-        raise box["error"]
-    return box.get("code", 0)
-
-
 if __name__ == "__main__":
-    sys.exit(_entry())
+    sys.exit(run_big_stack(main))

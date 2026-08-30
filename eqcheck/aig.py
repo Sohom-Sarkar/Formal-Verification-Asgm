@@ -1,18 +1,16 @@
-"""And-Inverter Graph: the common intermediate representation.
+"""And-Inverter Graph, the shared intermediate representation.
 
-Both the SAT and the BDD backends consume an AIG, so the Verilog frontend is
-written once. The representation follows the AIGER convention:
+Follows the AIGER convention:
 
     literal = (node_id << 1) | inverted
     literal 0 = constant FALSE, literal 1 = constant TRUE
 
-Node 0 is the constant node and owns literals 0 and 1. Inverters are encoded in
-the literal's low bit rather than as nodes, so complementing is free and never
-grows the graph.
+Node 0 is the constant. Inversion lives in the literal rather than in a node, so
+complementing is free and never grows the graph.
 
-Every AND node passes through a structural hash (`strash`), so a sub-circuit
-that is built twice is stored once. That is the cheapest form of the
-node-sharing that industrial checkers rely on.
+Every AND node passes through a structural hash, so a sub-circuit built twice is
+stored once. With both designs in one graph this doubles as a free equivalence
+check on any logic they build identically.
 """
 
 FALSE = 0
@@ -74,9 +72,8 @@ class AIG:
     # ----------------------------------------------------------- gate builders
 
     def mk_and(self, a, b):
-        # Constant folding and trivial identities. These fire constantly during
-        # bit-blasting (carry chains produce a lot of AND(x, 0)), so doing them
-        # here keeps the graph far smaller than the naive construction.
+        # Constant folding first. Carry chains produce a lot of AND(x, 0), so
+        # this keeps the graph much smaller than building it naively.
         if a == FALSE or b == FALSE:
             return FALSE
         if a == TRUE:
@@ -206,12 +203,7 @@ class AIG:
         return order
 
     def depth(self, roots):
-        """Longest path from any input to `roots`, in AND levels.
-
-        Logic depth is the standard proxy for circuit delay, and it is what
-        separates a ripple-carry adder from a parallel-prefix one even when
-        both have a similar node count.
-        """
+        """Longest input-to-`roots` path, in AND levels."""
         level = {0: 0}
         best = 0
         for node in self.cone(roots):
@@ -263,17 +255,14 @@ class CNF:
 
 
 def tseitin(aig, roots):
-    """Encode the cone of `roots` into CNF.
+    """Tseitin-encode the cone of `roots` into CNF.
 
-    For an AND node c = a & b the standard three clauses are emitted:
+    Each AND node c = a & b contributes
 
         (~c | a)  (~c | b)  (c | ~a | ~b)
 
-    which together assert c <-> (a & b). Only nodes inside the cone are
-    encoded, so unused logic costs nothing.
-
-    DIMACS variable 1 is pinned to FALSE and represents the AIG constant node,
-    which lets AIG literal 0/1 map to DIMACS +1/-1 with no special casing.
+    DIMACS var 1 is pinned FALSE and stands for the AIG constant, so literal
+    0/1 maps to +1/-1 with no special case.
     """
     cnf = CNF()
     const_var = cnf.new_var()          # var 1 == AIG node 0

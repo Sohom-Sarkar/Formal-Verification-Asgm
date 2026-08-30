@@ -6,7 +6,6 @@
 import argparse
 import json
 import sys
-import threading
 
 from .equiv import (build_miter, check_sat, check_bdd, analyze_outputs,
                     variable_order, best_static_order, sift_order,
@@ -15,6 +14,7 @@ from .elaborate import ElaborationError
 from .lexer import VerilogSyntaxError
 from .solvers import DEFAULT_SOLVER, verify_solver
 from . import export
+from .bigstack import run as run_big_stack
 from .localize import localize, diagnose
 from .algebraic import prove_equivalent_algebraic
 
@@ -564,33 +564,7 @@ def _jsonable(result):
 
 
 def main(argv=None):
-    # Elaboration recurses through the design's logic cones, which can be deep
-    # for wide ripple-carry structures. Run on a thread with a large stack so
-    # that a 64-bit adder does not hit CPython's default limits.
-    sys.setrecursionlimit(100000)
-    result = {}
-
-    def target():
-        try:
-            result["code"] = run(argv)
-        except BaseException as exc:       # noqa: BLE001 - re-raised below
-            result["error"] = exc
-
-    # Windows rejects some stack sizes outright, so fall back until one sticks.
-    for size in (128 * 1024 * 1024, 64 * 1024 * 1024, 32 * 1024 * 1024):
-        try:
-            threading.stack_size(size)
-            break
-        except (ValueError, RuntimeError):
-            continue
-
-    thread = threading.Thread(target=target)
-    thread.start()
-    thread.join()
-
-    if "error" in result:
-        raise result["error"]
-    return result.get("code", 0)
+    return run_big_stack(run, argv)
 
 
 if __name__ == "__main__":

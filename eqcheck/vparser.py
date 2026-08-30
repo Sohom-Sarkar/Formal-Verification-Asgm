@@ -149,9 +149,8 @@ class Parser:
             lsb = self.parse_expr()
             self.expect("]")
         names = [self.expect_id()]
-        # An ANSI port list separates ports by commas, and a bare identifier
-        # following a comma continues the *same* declaration only when the next
-        # token is not a direction keyword. Look ahead to decide.
+        # In an ANSI port list a bare identifier after a comma continues this
+        # declaration only if the next token is not a direction keyword.
         while self.at(",") and self.peek(1).kind == "id" and self.peek(2).value in (",", ")"):
             self.advance()
             names.append(self.expect_id())
@@ -407,9 +406,9 @@ class Parser:
     def parse_always(self):
         self.expect("always")
         if self.accept("@"):
-            # Sensitivity list is parsed and discarded: the design is required
-            # to be combinational, which is checked during elaboration by
-            # confirming no signal depends on its own previous value.
+            # Sensitivity list parsed and thrown away. Combinational-ness is
+            # enforced in the elaborator, which reports any signal that
+            # re-enters its own resolution as a combinational loop.
             if self.accept("("):
                 depth = 1
                 while depth:

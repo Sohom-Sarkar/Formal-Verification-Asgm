@@ -47,10 +47,8 @@ _BASE_BITS = {"b": 1, "o": 3, "d": 0, "h": 4}
 class Number:
     """A Verilog literal.
 
-    `xz_mask` marks bit positions written as x, z or ? in the source. Those
-    positions are don't-cares in a casez/casex label, so the mask has to
-    survive tokenisation - dropping it would silently turn a wildcard match
-    into an exact one.
+    `xz_mask` marks bit positions written x, z or ? - don't-cares in a
+    casez/casex label. Dropping it turns a wildcard match into an exact one.
     """
 
     __slots__ = ("width", "value", "signed", "xz_mask")

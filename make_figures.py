@@ -9,12 +9,12 @@ Run:  python make_figures.py
 
 import os
 import sys
-import threading
 
 from eqcheck.equiv import build_miter, variable_order
 from eqcheck.bdd import build_from_aig
 from eqcheck.sim import Simulator
 from eqcheck import export
+from eqcheck.bigstack import run as run_big_stack
 
 OUT = "results/figures"
 
@@ -30,8 +30,8 @@ def main():
     print("c17 design AIG            %2d nodes -> %s/c17_design_aig.dot"
           % (count, OUT))
 
-    # 2. A small miter that is NOT constant, so the BDD is worth drawing:
-    #    a 3-bit ripple-carry adder against a deliberately broken one.
+    # 2. A miter that is not constant, so the BDD is worth drawing:
+    #    3-bit ripple-carry against a deliberately broken one.
     good = """module a3(input [2:0] a, input [2:0] b, output [3:0] s);
   assign s = a + b;
 endmodule"""
@@ -75,29 +75,5 @@ endmodule"""
     return 0
 
 
-def _entry():
-    sys.setrecursionlimit(100000)
-    box = {}
-
-    def target():
-        try:
-            box["code"] = main()
-        except BaseException as exc:            # noqa: BLE001
-            box["error"] = exc
-
-    for size in (128 * 1024 * 1024, 64 * 1024 * 1024, 32 * 1024 * 1024):
-        try:
-            threading.stack_size(size)
-            break
-        except (ValueError, RuntimeError):
-            continue
-    thread = threading.Thread(target=target)
-    thread.start()
-    thread.join()
-    if "error" in box:
-        raise box["error"]
-    return box.get("code", 0)
-
-
 if __name__ == "__main__":
-    sys.exit(_entry())
+    sys.exit(run_big_stack(main))

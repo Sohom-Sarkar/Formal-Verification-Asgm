@@ -1,20 +1,13 @@
-"""A reduced ordered binary decision diagram package.
+"""Reduced ordered binary decision diagrams.
 
-Written from scratch rather than pulled from a library so the equivalence
-check can report genuine node counts and so variable-ordering experiments are
-possible.
+Written from scratch so node counts are real and variable ordering can be
+experimented with.
 
-The two reduction rules that make an OBDD *reduced* - and therefore canonical
-for a fixed variable order (Bryant, 1986) - are enforced at construction time
-by `make_node`:
-
-  1. redundant test elimination: a node whose branches are identical is not
-     created; its child is returned instead
-  2. isomorphic node sharing: the unique table returns the existing node for a
-     triple that already exists
-
-Canonicity is what makes equivalence checking trivial here: two functions are
-equal exactly when they are the *same node index*.
+Both reduction rules are enforced at construction by `make_node`: a node whose
+branches are identical is not created, and the unique table returns the existing
+node for a triple that already exists. That makes an ROBDD canonical for a fixed
+variable order (Bryant, 1986), so two functions are equal exactly when they are
+the same node index and equivalence checking needs no search.
 """
 
 FALSE = 0
@@ -44,7 +37,6 @@ class BDD:
         self._ite_cache = {}
         self.peak_nodes = 0
 
-    # ------------------------------------------------------------- structure
 
     def make_node(self, level, low, high):
         if low == high:
@@ -70,7 +62,6 @@ class BDD:
             return self.num_vars                    # terminals sit below all
         return self.nodes[node][0]
 
-    # ------------------------------------------------------------- operations
 
     def ite(self, f, g, h):
         """if-then-else: the single primitive every other operation builds on."""
@@ -123,7 +114,6 @@ class BDD:
     def apply_not(self, a):
         return self.ite(a, FALSE, TRUE)
 
-    # --------------------------------------------------------------- queries
 
     def count_nodes(self, roots):
         """Live node count reachable from `roots` (excludes terminals)."""
@@ -159,11 +149,10 @@ class BDD:
 
 
 def build_from_aig(aig, roots, order=None, node_limit=2_000_000):
-    """Build BDDs for `roots` (AIG literals) under a variable order.
+    """Build BDDs for `roots` under a variable order.
 
-    `order` is a list of AIG input node ids, best variable first. The default
-    is declaration order, which for adders is usually poor - passing an
-    interleaved order is the experiment worth running.
+    `order` is AIG input node ids, best first. Defaults to declaration order,
+    which is usually poor for adders.
     """
     inputs = list(aig.inputs)
     if order is None:

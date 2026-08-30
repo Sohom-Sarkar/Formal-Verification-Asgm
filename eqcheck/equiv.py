@@ -1,18 +1,14 @@
-"""Combinational equivalence checking.
+"""Miter construction and the SAT/BDD decision procedures.
 
-The miter construction (Brand, 1993): given designs F and G over the same
-primary inputs, build
+The miter (Brand, ICCAD 1993): elaborate both designs onto shared primary
+inputs, XOR corresponding outputs and OR the results. The miter is satisfiable
+exactly when some input makes the designs disagree, so
 
-    miter = OR over outputs i of ( F_i XOR G_i )
+    UNSAT  ->  equivalent
+    SAT    ->  the model is a counterexample
 
-Then miter is satisfiable exactly when some input makes the two designs
-disagree. So:
-
-    UNSAT  ->  the designs are equivalent
-    SAT    ->  the satisfying assignment IS a counterexample input vector
-
-The same miter node feeds the BDD backend, where the question becomes whether
-the miter's BDD is the FALSE terminal.
+The same root feeds the BDD backend, where the question becomes whether the
+miter BDD is the FALSE terminal.
 """
 
 import time
@@ -184,12 +180,9 @@ def _check_ports(left, right, kind, spec_top, impl_top):
 # ---------------------------------------------------------------------------
 
 def random_simulation(miter, num_vectors=512, seed=0x5EED):
-    """Try to refute equivalence by brute force before invoking a solver.
+    """Try to refute equivalence by simulation before calling a solver.
 
-    Shallow bugs - a swapped operand, an inverted select - are exposed by
-    almost any random vector, and finding one this way costs microseconds
-    instead of a solver call. Only failure to falsify justifies the proof
-    effort that follows.
+    Shallow bugs fall out of almost any random vector.
     """
     started = time.perf_counter()
     sim = ParallelSim(miter.aig, num_vectors=num_vectors, seed=seed)
@@ -211,14 +204,11 @@ def random_simulation(miter, num_vectors=512, seed=0x5EED):
 def check_sat(miter, solver_name=DEFAULT_SOLVER, dimacs_path=None,
               sweep=False, presimulate=True, sim_vectors=512,
               minimize=False, sweep_vectors=192):
-    """Decide the miter with SAT, optionally preceded by simulation and sweeping.
+    """Decide the miter with SAT, cheapest stage first.
 
-    The pipeline mirrors what a production checker does, cheapest test first:
+        structural hashing -> random simulation -> SAT sweeping -> SAT
 
-        structural hashing  ->  random simulation  ->  SAT sweeping  ->  SAT
-
-    Each stage can settle the question outright, so the solver only ever sees
-    what survives all of them.
+    Any stage can settle it, so the solver only sees what survives the rest.
     """
     from pysat.solvers import Solver
 
@@ -309,22 +299,16 @@ def check_sat(miter, solver_name=DEFAULT_SOLVER, dimacs_path=None,
 
 
 def minimize_counterexample(miter, counterexample, solver_name=DEFAULT_SOLVER):
-    """Shrink a counterexample to the input bits that actually matter.
+    """Shrink a counterexample to the input bits that matter.
 
-    A care set C is valid when fixing C *forces* the miter to 1 - that is, when
-    it is impossible to complete C and still have the designs agree. So the
-    test for dropping a bit is not "is the miter still satisfiable" (it always
-    is - the designs genuinely differ somewhere) but:
+    A care set is valid when fixing it *forces* the miter to 1, so the test for
+    dropping a bit is
 
         solve( [miter = 0] + remaining fixed bits )   must be UNSAT
 
-    UNSAT means every completion of the remaining assignment still exposes the
-    bug, so the dropped bit was irrelevant. Each bit is tried once, greedily,
-    which yields a locally minimal care set - the bits that actually provoke
-    the bug, rather than 33 arbitrary values.
-
-    Every solve is incremental under assumptions, so the whole scan costs one
-    solver instance no matter how many bits are tested.
+    not "is the miter still satisfiable" - it always is. Greedy, one pass, so
+    the result is locally minimal. All solves are incremental under
+    assumptions.
     """
     started = time.perf_counter()
     encoder = IncrementalEncoder(miter.aig, solver_name=solver_name)
@@ -483,11 +467,10 @@ def check_bdd(miter, order=None, node_limit=2_000_000):
 
 
 def interleaved_order(miter):
-    """Interleave the bits of equally-wide input ports.
+    """Interleave the bits of equally wide input ports.
 
-    For adders and comparators this is dramatically better than declaration
-    order: it keeps the bits that a carry chain relates adjacent in the order,
-    which is the difference between a linear and an exponential BDD.
+    Keeps bits related by a carry adjacent, which is the difference between a
+    linear and an exponential BDD on adders.
     """
     groups = [miter.input_bits[name] for name, _ in miter.input_order]
     order = []
@@ -499,11 +482,7 @@ def interleaved_order(miter):
 
 
 def dfs_order(miter):
-    """Inputs in the order a depth-first walk from the miter output reaches them.
-
-    A common static heuristic: variables that feed the same sub-circuit end up
-    near each other, which is usually what keeps a BDD small.
-    """
+    """Inputs in the order a depth-first walk from the miter output reaches them."""
     seen = []
     visited = set()
     stack = [node_of(miter.root)]
@@ -548,12 +527,11 @@ STATIC_ORDERS = ("interleaved", "dfs", "declaration", "reverse")
 
 
 def best_static_order(miter, strategies=STATIC_ORDERS, node_limit=200_000):
-    """Try each static heuristic under a budget and keep the smallest.
+    """Try each static heuristic under a shrinking budget, keep the smallest.
 
-    Ordering heuristics are cheap to evaluate and wildly problem-dependent -
-    interleaving wins on adders, a depth-first walk often wins elsewhere - so
-    simply trying all of them and keeping the winner beats committing to any
-    single rule. Each attempt is budgeted, so a hopeless order aborts early.
+    Each attempt is capped at the best size so far, so a hopeless order aborts
+    early. Note this makes a per-strategy 'overflow' mean 'worse than the
+    incumbent', not 'past the budget'.
     """
     started = time.perf_counter()
     results = {}
@@ -584,18 +562,15 @@ def best_static_order(miter, strategies=STATIC_ORDERS, node_limit=200_000):
 
 def sift_order(miter, initial=None, max_builds=160, node_limit=200_000,
                trial_cap=40_000, verbose=False):
-    """Improve a BDD variable order by sifting (Rudell, ICCAD 1993).
+    """Improve a variable order by sifting (Rudell, ICCAD 1993).
 
-    Each variable is moved through the order and kept wherever it produced the
-    smallest BDD. The essential trick is the abort budget: a trial build is
-    capped, so a bad position blows the limit almost immediately and costs
-    almost nothing. Without it, searching orders would cost far more than the
-    build being optimised.
+    Each variable is moved through the order and kept where the BDD was
+    smallest. Trial builds are capped at the incumbent size so a bad position
+    aborts almost immediately.
 
-    This rebuilds the BDD per trial rather than swapping adjacent levels in
-    place the way a production package does. That is asymptotically worse - and
-    the measured payoff here is correspondingly modest - but it demonstrates
-    the algorithm without a rewrite of the BDD core.
+    Rebuilds per trial instead of swapping adjacent levels in place, so it is
+    much more expensive than a real implementation and gains correspondingly
+    little.
     """
     started = time.perf_counter()
     order = list(initial if initial is not None else declaration_order(miter))
@@ -656,15 +631,10 @@ def sift_order(miter, initial=None, max_builds=160, node_limit=200_000,
 # ---------------------------------------------------------------------------
 
 def analyze_outputs(miter, solver_name=DEFAULT_SOLVER):
-    """Per-output-bit verdict, cone size and logic depth.
+    """Per-output-bit verdict, cone size and depth.
 
-    A whole-miter answer is yes/no. This narrows a failure to the exact output
-    bits that can differ, which is what you actually need when debugging.
-
-    All output bits share one incremental solver: the miter CNF is built once
-    and each bit is queried as an assumption, so clauses learned while checking
-    bit 0 speed up bit 1. Bits whose XOR folded to constant FALSE were proved
-    equal by structural hashing and skip the solver entirely.
+    One incremental solver for all bits, queried by assumption. Bits whose XOR
+    folded to FALSE were settled by structural hashing and skip the solver.
     """
     started = time.perf_counter()
     encoder = IncrementalEncoder(miter.aig, solver_name=solver_name)

@@ -1,17 +1,11 @@
 """SAT solver selection.
 
-PySAT bundles about twenty solvers, but not all of them build cleanly on every
-platform. On this environment (Windows, CPython 3.14, python-sat 1.9.dev15)
-three of them abort the *process* rather than raising a Python exception, which
-cannot be caught with try/except - the interpreter is simply gone.
+PySAT bundles about twenty solvers, and three of them abort the process rather
+than raising on this platform (Windows, CPython 3.14, python-sat 1.9.dev15), so
+try/except cannot help. `verify_solver` screens names before construction.
 
-So the names are screened here instead. `verify_solver` is called before any
-solver is constructed, turning what would be a silent segfault into an ordinary
-error message.
-
-Run `python -m eqcheck.solvers` to re-probe this list on another machine: each
-solver is exercised in a subprocess, so a crashing one cannot take the probe
-down with it.
+Run `python -m eqcheck.solvers` to re-probe on another machine; each solver is
+exercised in a subprocess so a crashing one cannot take the probe down.
 """
 
 import subprocess

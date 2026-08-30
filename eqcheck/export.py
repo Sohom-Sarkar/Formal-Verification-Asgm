@@ -1,27 +1,20 @@
-"""Export the miter to standard formats.
+"""AIGER and Graphviz export.
 
-Two purposes:
-
-  * **Independent cross-checking.** The AIGER file can be handed to Berkeley
-    ABC (`read_aiger miter.aag; sat`) or any AIGER-based tool, and the DIMACS
-    file to any SAT solver. Agreement with an external, independently written
-    tool is much stronger evidence than our own test suite.
-  * **Figures.** The DOT output draws the AIG and the BDD for the report.
+The AIGER file can be checked independently with ABC
+(`read_aiger miter.aag; sat`), which is stronger evidence than our own tests.
+The DOT output draws the AIG and BDD for figures.
 """
 
 from .aig import FALSE, TRUE, node_of, is_inverted
 
 
-# ---------------------------------------------------------------------------
 # AIGER (ASCII variant, .aag)
-# ---------------------------------------------------------------------------
 
 def write_aiger(aig, roots, path, input_names=None, output_names=None):
-    """Write the cone of `roots` in ASCII AIGER format.
+    """Write the cone of `roots` as ASCII AIGER.
 
-    AIGER numbers literals exactly the way this AIG does - 2*node + inverted,
-    with 0/1 as the constants - but requires that variables be numbered
-    contiguously with inputs first, so nodes are renumbered on the way out.
+    Same literal convention as our AIG, but variables must be contiguous with
+    inputs first, so nodes are renumbered on the way out.
     """
     cone = aig.cone(roots)
     and_nodes = [n for n in cone if n in aig.and_gates]
@@ -73,9 +66,7 @@ def write_aiger(aig, roots, path, input_names=None, output_names=None):
             "ands": len(and_nodes), "outputs": len(roots)}
 
 
-# ---------------------------------------------------------------------------
 # Graphviz
-# ---------------------------------------------------------------------------
 
 def write_aig_dot(aig, roots, path, max_nodes=400, root_labels=None):
     """Draw the AIG. Inverted edges are dashed, matching the usual convention."""

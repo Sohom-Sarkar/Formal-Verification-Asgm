@@ -6,3 +6,7 @@
 # 3.14. eqcheck/solvers.py screens those out; run `python -m eqcheck.solvers`
 # to re-probe on another machine.
 python-sat>=1.8
+
+# Only needed to regenerate the charts in results/figures/ with
+# make_plots.py. The checker itself does not import it.
+# matplotlib>=3.8

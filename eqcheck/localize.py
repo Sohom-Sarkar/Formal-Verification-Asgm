@@ -1,47 +1,20 @@
-"""SAT-based fault localisation: which gate is actually wrong?
+"""SAT-based fault localisation (Smith & Veneris, IEEE TCAD 2005).
 
-An equivalence checker that reports "these differ, here is an input" leaves the
-designer to find the bug. This goes one step further and asks *where* the
-design would have to change, following Smith, Veneris et al., "Fault diagnosis
-and logic debugging using Boolean satisfiability" (IEEE TCAD, 2005).
+A node n is a single-fix location if some replacement function at n would make
+the designs equivalent, i.e. if for every input there is a value at n that
+repairs the outputs. Since that value is 0 or 1, the negation is propositional:
 
-The formulation
----------------
+    SAT( miter(n := 0) AND miter(n := 1) )  =>  n is NOT a fix location
+    UNSAT                                   =>  n IS a valid fix location
 
-Call a node `n` in the revised design a **single-fix location** if some
-replacement function at `n` would make the two designs equivalent. Since the
-replacement is free to be any function of the primary inputs, that is:
+Build two copies of the revised design sharing the primary inputs, one with n
+tied low and one high, miter each against the reference, and look for an input
+that defeats both. Only nodes feeding a failing output are considered.
 
-    for every input x, there exists v in {0,1} such that
-    forcing n := v makes every output match
-
-Negating, `n` is *not* a fix location exactly when
-
-    there exists an input x such that BOTH forcings still mismatch
-
-and because v ranges over just two values, that negation is a single
-propositional formula. Build two copies of the revised design that share the
-primary inputs - one with `n` tied to 0, one with `n` tied to 1 - miter each
-against the reference, and ask for an input that breaks both at once:
-
-    SAT( miter(n := 0)  AND  miter(n := 1) )   =>  n is NOT a fix location
-    UNSAT                                      =>  n IS a valid fix location
-
-An UNSAT result means no input can defeat both forcings, so at every input at
-least one value of `n` repairs the outputs - which is precisely the definition.
-
-Notes on the result
--------------------
-
-Several nodes are usually valid simultaneously: a fault can be repaired at the
-gate that is wrong, and often also downstream of it, since a later gate can
-compensate. The true culprit is among them, and the set is normally a tiny
-fraction of the circuit, so it is a genuine localisation rather than a single
-guaranteed answer. Reporting the candidates by hierarchical Verilog name is
-what makes it usable.
-
-Only nodes in the fan-in cone of a *failing* output are considered: a gate that
-cannot influence any wrong output cannot possibly repair one.
+Several nodes are usually valid at once, since a fault can often be compensated
+downstream. The true culprit is among them, but the set is not a singleton.
+`diagnose` handles the multi-fault case, which is common because a bug inside a
+module instantiated four times is four faults.
 """
 
 import time
@@ -90,11 +63,8 @@ def _copy_cone(src, roots, dst, input_node_to_lit,
                substitute_node=None, substitute_lit=FALSE):
     """Copy the cone of `roots` from `src` into `dst`.
 
-    If `substitute_node` is given, that node is replaced by `substitute_lit`
-    (a constant) - everything downstream of it then sees the forced value,
-    while everything else is rebuilt unchanged. Structural hashing in `dst`
-    automatically shares the untouched part between copies, so forcing one node
-    two ways costs far less than two full circuits.
+    `substitute_node` is forced to `substitute_lit`. Structural hashing in `dst`
+    shares the untouched part between copies.
     """
     mapping = dict(input_node_to_lit)
     mapping[0] = FALSE
@@ -250,29 +220,14 @@ def _input_map(design, shared_inputs):
     return mapping
 
 
-# ---------------------------------------------------------------------------
 # N-fault diagnosis
-# ---------------------------------------------------------------------------
-#
-# A single-fix search fails outright when several gates are wrong at once - and
-# that is the common case, because a bug inside a module instantiated four
-# times *is* four faults. The published remedy (Smith and Veneris again) is
-# counterexample-driven diagnosis:
-#
-#   * take k input vectors on which the designs disagree
-#   * build k replicas of the revised design, all sharing one set of selector
-#     variables s_n, one per candidate gate
-#   * in every replica, gate n produces its normal value when s_n = 0, and a
-#     free variable when s_n = 1 - the gate has been cut and may take any value
-#     the solver likes
-#   * pin the inputs of each replica to its vector, and its outputs to what the
-#     reference produces there
-#   * constrain  sum(s_n) <= N
-#
-# A satisfying assignment names at most N gates whose replacement explains
-# every observed failure. That is necessary but not sufficient - it accounts
-# only for the k vectors supplied - so each candidate set is afterwards checked
-# exactly by `verify_fix_set`.
+# Single-fix search fails when several gates are wrong at once, which is the
+# usual case: a bug inside a module instantiated four times is four faults.
+# Counterexample-driven diagnosis instead (Smith & Veneris): k replicas sharing
+# one selector variable per gate, each gate cut and free when its selector is
+# set, inputs pinned to a failing vector, outputs pinned to the reference, and
+# sum(s_n) <= N. Only accounts for the k vectors supplied, so verify_fix_set
+# checks the result exactly.
 
 def _counterexamples(spec, impl, limit=12, seed=0xC0FFEE):
     """Input vectors on which the two designs disagree."""
@@ -446,10 +401,8 @@ def diagnose(spec_path, impl_path, spec_top=None, impl_top=None,
         # than `max_faults` simultaneous changes, which is itself informative.
         faults = None
 
-    # Any design can be "repaired" by replacing its own primary outputs, so a
-    # diagnosis made entirely of output gates is technically valid and
-    # completely useless. Rank those last, and prefer diagnoses that sit deeper
-    # inside the logic, where a real fault is more likely to live.
+    # Replacing the primary outputs "repairs" any design, so an all-output
+    # diagnosis is valid and useless. Rank those last, deeper gates first.
     output_nodes = {node_of(lit) for name in shared for lit in impl_out[name]
                     if lit > 1}
 
@@ -489,13 +442,10 @@ def diagnose(spec_path, impl_path, spec_top=None, impl_top=None,
 def verify_fix_set(spec, impl, shared, nodes, solver_name=DEFAULT_SOLVER):
     """Exactly verify that `nodes` is a valid fix set.
 
-    Generalises the single-node test: a set S repairs the design iff for every
-    input there is some assignment of constants to S making all outputs match.
-    Negated, S fails iff one input defeats all 2^|S| forcings at once, so build
-    a copy of the design per forcing pattern, miter each against the reference,
-    and ask whether every miter can be 1 simultaneously.
-
-    Exponential in the size of S, which is why it is used only for small sets.
+    S repairs the design iff every input admits some assignment of constants to
+    S that makes the outputs match. Negated: S fails iff one input defeats all
+    2^|S| forcings, so build a copy per forcing and ask whether every miter can
+    be 1 at once. Exponential in |S|, hence small sets only.
     """
     import itertools
 

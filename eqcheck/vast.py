@@ -13,8 +13,6 @@ class Node:
         return "%s(%s)" % (type(self).__name__, inner)
 
 
-# ------------------------------------------------------------- design units
-
 class Module(Node):
     _fields = ("name", "params", "ports", "items")
 
@@ -54,8 +52,6 @@ class GenerateBlock(Node):
     _fields = ("items",)
 
 
-# -------------------------------------------------------------- statements
-
 class Block(Node):
     _fields = ("statements",)
 
@@ -75,8 +71,6 @@ class Case(Node):
 class For(Node):
     _fields = ("var", "start", "cond", "step", "body")
 
-
-# ------------------------------------------------------------- expressions
 
 class Const(Node):
     _fields = ("number",)

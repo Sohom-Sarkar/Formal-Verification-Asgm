@@ -1,13 +1,9 @@
-"""Standalone simulation of a single elaborated design.
+"""Simulation of a single elaborated design.
 
-The equivalence checker compares two designs against each other, which cannot
-catch a systematic frontend bug: if the parser or the bit-blaster misreads the
-same construct in both files, the two designs stay equal to each other and the
-checker happily reports EQUIVALENT.
-
-Simulating one design on its own and comparing against an independent golden
-model written in Python closes that gap, so this is what the regression suite
-uses to validate the frontend itself.
+Comparing two designs cannot catch a systematic frontend bug: if the parser
+misreads the same construct in both, they stay equal to each other and the
+checker reports EQUIVALENT. Simulating one design against an independent Python
+model closes that gap, which is what the regression suite uses it for.
 """
 
 from .aig import node_of, is_inverted

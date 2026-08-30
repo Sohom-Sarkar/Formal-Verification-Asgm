@@ -1,23 +1,12 @@
 """Bit-parallel random simulation.
 
-Every node carries a *signature*: a Python integer used as a bit-vector, where
-bit k holds that node's value under random input vector k. Because Python
-integers are arbitrary precision, one `&` evaluates the node under hundreds of
-input vectors at once, and inversion is one masked `~`.
+Each node carries a signature: a Python int used as a bit-vector, where bit k is
+the node value under random vector k. One `&` therefore evaluates the node under
+hundreds of vectors at once.
 
-This buys two things:
-
-  * **Cheap falsification.** If any random vector makes the miter output 1, the
-    designs differ and no SAT call was needed. Random simulation finds shallow
-    bugs far faster than a solver does.
-  * **Candidate equivalence classes.** Two nodes can only be functionally
-    equivalent if their signatures match under every vector. Signatures are
-    therefore a sound *filter*: nodes in different classes are definitely not
-    equivalent, so SAT is only asked about plausible pairs. This is the
-    engine behind SAT sweeping (see `sweep.py`).
-
-Signatures never prove equivalence - matching signatures are necessary but not
-sufficient, so every candidate still goes to the solver.
+Two uses: cheap falsification of the miter, and candidate filtering for SAT
+sweeping. Nodes with different signatures cannot be equivalent, so signatures
+are a sound filter, though matching signatures prove nothing on their own.
 """
 
 import random
@@ -37,7 +26,6 @@ class ParallelSim:
             self.patterns[node] = self.rng.getrandbits(num_vectors) & self.mask
         self._signatures = None
 
-    # ------------------------------------------------------------- extension
 
     def add_vectors(self, assignments):
         """Append specific input vectors, e.g. counterexamples from the solver.
@@ -58,7 +46,6 @@ class ParallelSim:
         self.mask = (1 << self.num_vectors) - 1
         self._signatures = None
 
-    # ------------------------------------------------------------ evaluation
 
     def signatures(self, order=None, roots=None):
         """Signature for every node in the cone, computed in topological order."""
@@ -94,7 +81,6 @@ class ParallelSim:
     def lit_signature(self, sigs, lit):
         return self._lit_sig(sigs, lit)
 
-    # -------------------------------------------------------------- witness
 
     def extract_vector(self, index):
         """Input assignment for random vector `index`, as {input node -> bool}."""
@@ -112,9 +98,8 @@ class ParallelSim:
 def canonical_signature(signature, mask):
     """Key that groups a signature with its complement.
 
-    Two nodes are worth testing if their signatures are equal *or* exactly
-    complementary, since AIG literals carry inversion for free. Keying on
-    min(sig, ~sig) puts both cases in the same bucket.
+    AIG literals carry inversion for free, so a node matching the negation of
+    another is just as useful; min(sig, ~sig) buckets both.
     """
     complement = (~signature) & mask
     if signature <= complement:

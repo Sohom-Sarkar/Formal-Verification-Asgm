@@ -1,41 +1,23 @@
-"""SAT sweeping: proving internal equivalences before the output miter.
+"""SAT sweeping (Kuehlmann & Krohm, DAC 1997).
 
-Based on Kuehlmann & Krohm, *Equivalence checking using cuts and heaps*, DAC
-1997 - the technique that made equivalence checking scale to real designs.
+A plain output miter ignores everything the two designs have in common. Sweeping
+works bottom-up instead: group nodes by simulation signature, walk the graph in
+topological order rebuilding it, and ask the solver whether each node is
+equivalent to an earlier member of its class. Proved pairs are merged, and
+structural hashing propagates the merge upward, so the miter usually folds to
+FALSE before the walk reaches the outputs.
 
-The problem with a plain output miter is that it throws away everything the two
-designs have in common. Two implementations of the same adder compute the same
-internal carries; asking a solver to prove the outputs equal, from scratch,
-ignores that completely.
+Signatures only filter candidates; every merge is backed by an UNSAT proof.
+A refuted candidate feeds its counterexample back into the simulator, which
+splits the class so the same guess is not made twice.
 
-Sweeping works bottom-up instead:
+Equivalence of a and b is tested incrementally under assumptions:
 
-  1. Run bit-parallel random simulation and group nodes by signature. Nodes
-     with different signatures are definitely inequivalent, so only nodes
-     sharing a signature are ever considered - the filter is sound.
-  2. Walk the graph in topological order, rebuilding it into a fresh AIG. For
-     each node, ask the solver whether it is equivalent to an earlier
-     representative of its signature class.
-  3. If UNSAT, the two are provably equal: *merge* them, so the rebuilt graph
-     uses one node for both. Every later node built on top of it now sees the
-     merged version, and structural hashing collapses the duplicates
-     automatically, so proofs cascade upward.
-  4. If SAT, the signature match was a false positive. The counterexample is
-     fed back into the simulator, which splits the class so the same wrong
-     guess is not made again.
+    solve([ a, -b])  UNSAT  =>  a implies b
+    solve([-a,  b])  UNSAT  =>  b implies a
 
-By the time the walk reaches the outputs, the miter has usually already folded
-to constant FALSE and the equivalence is proved without ever solving the hard
-output-level instance.
-
-Every equivalence test is an *incremental* solve under assumptions. To ask
-whether literals a and b are equal we ask for a counterexample twice:
-
-    solve(assumptions=[ a, -b])      -> UNSAT means a implies b
-    solve(assumptions=[-a,  b])      -> UNSAT means b implies a
-
-Both UNSAT means a == b. One solver instance is reused for the whole sweep, so
-every clause learned while proving one equivalence helps prove the next.
+One solver instance serves the whole sweep, so clauses learned proving one
+equivalence help prove the next.
 """
 
 import time
@@ -123,11 +105,9 @@ class IncrementalEncoder:
 
 
 def _model_to_inputs(model, encoder, old_of_new):
-    """Turn a solver model into {original input node -> bool}.
+    """Solver model -> {original input node: bool}.
 
-    The solver reasons about the rebuilt graph, but the simulator lives on the
-    original one, so the values have to be translated back before they can be
-    fed in as new simulation vectors.
+    The solver works on the rebuilt graph, the simulator on the original one.
     """
     if model is None:
         return {}
@@ -173,10 +153,8 @@ def sat_sweep(aig, root, num_vectors=192, solver_name=DEFAULT_SOLVER,
 
     encoder = IncrementalEncoder(new, solver_name=solver_name)
 
-    # Every literal registered as a class representative, kept as
-    # (literal in the new graph, node in the original graph). The original
-    # node is what indexes into the signature table, so refinement can re-key
-    # the whole table after new vectors arrive.
+    # (literal in the new graph, node in the original). The original node
+    # indexes the signature table, so refinement can re-key after new vectors.
     registered = []
     classes = {}
 
@@ -199,10 +177,8 @@ def sat_sweep(aig, root, num_vectors=192, solver_name=DEFAULT_SOLVER,
     def refine():
         """Fold refuted counterexamples back into the simulation.
 
-        A refuted candidate proves the two nodes differ on some input; adding
-        that input as a simulation vector splits their signature class, so no
-        later node in the class wastes a solver call on the same wrong guess.
-        This is what keeps the candidate lists honest as the sweep proceeds.
+        A refutation proves the two nodes differ somewhere; adding that input
+        splits their signature class so nothing else in it wastes a solver call.
         """
         nonlocal sigs, refinements
         if not pending:
@@ -237,9 +213,8 @@ def sat_sweep(aig, root, num_vectors=192, solver_name=DEFAULT_SOLVER,
         signature = sigs[node]
         key, _complemented = canonical_signature(signature, sim.mask)
 
-        # A node whose signature is constant across every vector is a candidate
-        # constant. Cheaper to test than a pairwise equivalence, and merging it
-        # collapses everything built on top of it.
+        # Constant signature => candidate constant. Cheaper than a pairwise
+        # test, and merging it collapses everything above.
         if signature == 0 or signature == sim.mask:
             target = FALSE if signature == 0 else TRUE
             probe = lit if target == FALSE else neg(lit)
@@ -256,9 +231,8 @@ def sat_sweep(aig, root, num_vectors=192, solver_name=DEFAULT_SOLVER,
             candidate, candidate_node = entry
             if candidate == lit or candidate in (FALSE, TRUE):
                 continue
-            # Same class means the signatures are equal or exactly
-            # complementary; compare them directly to pick the phase, so the
-            # decision stays correct after refinement re-keys the table.
+            # Same class => signatures equal or complementary. Compare them
+            # directly so the phase stays right after a re-key.
             complemented = sigs[candidate_node] != signature
             target = neg(candidate) if complemented else candidate
 

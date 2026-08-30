@@ -23,7 +23,6 @@ Run:  python run_tests.py [-v]
 
 import random
 import sys
-import threading
 import time
 
 from eqcheck.equiv import (build_miter, check_sat, check_bdd, analyze_outputs,
@@ -31,6 +30,7 @@ from eqcheck.equiv import (build_miter, check_sat, check_bdd, analyze_outputs,
 from eqcheck.sim import Simulator
 from eqcheck.localize import localize, diagnose
 from eqcheck.algebraic import verify_multiplier, prove_equivalent_algebraic
+from eqcheck.bigstack import run as run_big_stack
 
 PASS = "PASS"
 FAIL = "FAIL"
@@ -513,29 +513,5 @@ def main():
     return 1 if failures else 0
 
 
-def _entry():
-    sys.setrecursionlimit(100000)
-    box = {}
-
-    def target():
-        try:
-            box["code"] = main()
-        except BaseException as exc:            # noqa: BLE001
-            box["error"] = exc
-
-    for size in (128 * 1024 * 1024, 64 * 1024 * 1024, 32 * 1024 * 1024):
-        try:
-            threading.stack_size(size)
-            break
-        except (ValueError, RuntimeError):
-            continue
-    thread = threading.Thread(target=target)
-    thread.start()
-    thread.join()
-    if "error" in box:
-        raise box["error"]
-    return box.get("code", 0)
-
-
 if __name__ == "__main__":
-    sys.exit(_entry())
+    sys.exit(run_big_stack(main))

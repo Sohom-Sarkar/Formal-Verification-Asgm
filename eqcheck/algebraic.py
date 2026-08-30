@@ -1,62 +1,27 @@
-"""Algebraic verification of arithmetic circuits, by polynomial reduction.
+"""Algebraic verification of arithmetic circuits (the AMulet approach).
 
-Multipliers are the case where SAT falls apart. Our own measurements put a
-12x12 multiplier miter at over three hours of CDCL search. The literature is
-blunt about why: CDCL is simply the wrong tool for arithmetic, and the right
-one is computer algebra (Kaufmann, Biere and Kauers; the AMulet line of work).
+Multipliers are where CDCL falls apart: a 12x12 multiplier miter takes over
+three hours here. Computer algebra handles them in milliseconds.
 
-The idea
---------
+Work in Z[x_1..x_n] modulo x^2 = x. An AIG AND node gives the relation
 
-Work in the ring Z[x_1, ..., x_n] modulo the Boolean relations x^2 = x. Every
-gate becomes a polynomial equation. For an AIG AND node
+    v - L(l1) * L(l2) = 0        L(x) = x, or 1 - x for a negated literal
 
-    v = l1 AND l2        with  L(x) = x  for a positive literal
-                               L(x) = 1 - x  for a negated one
+and the property to prove is the specification polynomial
 
-the defining relation is simply
-
-    v - L(l1) * L(l2) = 0
-
-and the thing to prove - that the circuit really computes a product - is the
-*specification polynomial*
-
-    SPEC  =  sum_i 2^i p_i  -  (sum_i 2^i a_i) * (sum_j 2^j b_j)
+    SPEC = sum 2^i p_i - (sum 2^i a_i) * (sum 2^j b_j)
 
 The circuit is correct exactly when SPEC reduces to zero modulo the gate
-relations. So the whole verification is: substitute every gate variable by its
-definition, and see whether everything cancels.
+relations. Reduction normally needs a Groebner basis, but the gate polynomials
+already form one when every gate is ordered above its inputs, so it reduces to
+substitution in reverse topological order.
 
-Why this is cheap
------------------
+Since x^2 = x, a monomial is a set of variables, so a polynomial is a dict from
+frozenset to coefficient and monomial multiplication is set union.
 
-In general, reducing modulo a set of polynomials needs a Groebner basis, and
-computing one is doubly exponential. The saving grace - and the reason this
-approach works at all - is that the gate polynomials *already are* a Groebner
-basis, provided variables are ordered so that every gate is greater than its
-inputs. Reduction then degenerates into plain substitution in reverse
-topological order: eliminate the variables nearest the outputs first and walk
-back toward the inputs. No Buchberger, no basis computation.
-
-Representation
---------------
-
-Because x^2 = x, a monomial is just a *set* of variables - exponents never
-exceed one. A polynomial is therefore a dict
-
-    frozenset(variables)  ->  integer coefficient
-
-and multiplying two monomials is a set union. Substituting v := P in a
-polynomial S splits S = v*Q + R and rewrites it as P*Q + R.
-
-Limits
-------
-
-This is the textbook core of the method, not AMulet. It has none of the
-preprocessing that makes heavily optimised industrial multipliers tractable -
-adder detection, variable elimination, XOR rewriting - so a restructured
-multiplier can still blow up the intermediate polynomial. A term budget bounds
-that rather than letting it exhaust memory.
+This is the core method, not AMulet: no adder detection, variable elimination or
+XOR rewriting, so a heavily restructured multiplier can still blow up. A term
+budget bounds that instead of exhausting memory.
 """
 
 import time
@@ -115,12 +80,7 @@ def literal_poly(lit):
 
 
 def substitute(poly, var, definition, max_terms):
-    """Replace `var` by `definition` throughout `poly`.
-
-    Splits poly = var*Q + R and returns definition*Q + R. Because monomials are
-    sets, "contains var" is a membership test and removing it is a set
-    difference.
-    """
+    """Replace `var` by `definition`: splits poly = var*Q + R, returns definition*Q + R."""
     quotient = {}
     remainder = {}
     for monomial, coeff in poly.items():
@@ -195,11 +155,9 @@ def reduce_through_circuit(aig, spec, roots, max_terms=400_000, trace=None):
 def verify_multiplier(path=None, text=None, top=None, params=None,
                       a="a", b="b", p="p", signed=False,
                       max_terms=400_000):
-    """Prove that a design computes the product of two of its input ports.
+    """Prove a design computes the product of two of its input ports.
 
-    This is stronger than an equivalence check: it verifies the circuit against
-    the *arithmetic specification* itself, so no reference implementation is
-    needed at all.
+    Checks against the arithmetic spec, so no reference design is needed.
     """
     from .localize import DesignInstance
 
@@ -250,16 +208,10 @@ def verify_multiplier(path=None, text=None, top=None, params=None,
 def prove_equivalent_algebraic(spec_path, impl_path, spec_top=None, impl_top=None,
                                params=None, a="a", b="b", p="p", signed=False,
                                max_terms=400_000):
-    """Equivalence by way of a shared specification.
+    """Equivalence via the spec: prove each design is a multiplier separately.
 
-    Rather than comparing the two designs against each other, prove each one
-    against the arithmetic specification independently. If both compute the
-    product of the same two ports, they compute the same function, so they are
-    equivalent - and neither proof ever looks at the other design.
-
-    This is how arithmetic circuits are actually verified in practice, and it
-    sidesteps the miter entirely: the cost depends on each circuit separately
-    rather than on how differently the two are structured.
+    Neither proof looks at the other design, and no miter is built, so cost
+    depends on each circuit rather than on how differently they are built.
     """
     started = time.perf_counter()
 
@@ -273,9 +225,8 @@ def prove_equivalent_algebraic(spec_path, impl_path, spec_top=None, impl_top=Non
     elif left["proved"] and right["proved"]:
         verdict = True
     else:
-        # One of them is not a multiplier. That does not by itself make the two
-        # designs inequivalent - they could be wrong in the same way - so the
-        # honest answer is "not established here", and the SAT backend decides.
+        # One is not a multiplier. They could still be wrong the same way, so
+        # this is "not established", not "inequivalent". Leave it to SAT.
         verdict = None
 
     return {

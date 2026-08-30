@@ -39,6 +39,8 @@ python benchmark.py        # regenerates results/benchmark.md
 Exit status: `0` equivalent, `1` not equivalent, `2` input error, `3`
 inconclusive, `4` backends disagree.
 
+![Multiplier scaling](results/figures/scaling.png)
+
 ## How it works
 
 Both designs are parsed, bit-blasted to gates and elaborated into one shared
@@ -262,6 +264,8 @@ and a 12x12 multiplier that takes over three hours of SAT search.
 | 13 | ISCAS-85 c17, six NAND gates | 32-entry truth table | equivalent |
 | 14 | *N*×*N* multiplier, `a * b` | carry-save array multiplier | equivalent |
 
+![Test-case size](results/figures/complexity.png)
+
 Cases 4 and 14 are parameterised with `-p WIDTH=n` and drive the scaling
 studies.
 
@@ -281,9 +285,11 @@ in a 2,645-node cone. It changes the shape of the curve on hard instances rather
 than helping easy ones.
 
 **No BDD ordering heuristic wins everywhere.** DFS peaks at 843 nodes on the
-16-bit adder against interleaved's 4,557, but overflows on the multiplier where
-`reverse` wins at 21,061. On the ALU only interleaved survives. Sifting adds 13%
-on the ALU, 2% on the multiplier and nothing elsewhere.
+16-bit adder against interleaved's 4,557, but is the worst of the four on the
+ALU (14,643 against interleaved's 7,498), and on the multiplier `reverse` wins
+at 21,061. Declaration order is the only one that ever blows the budget, and
+only on the two 16-bit adders. Sifting adds 13% on the ALU, 2% on the
+multiplier and nothing elsewhere.
 
 **Random simulation resolves most real bugs** in under a millisecond, and 481 of
 500 fuzz verdicts. Falsification is cheap; proofs are expensive.
@@ -339,7 +345,8 @@ results/         benchmark tables, figures, AIGER exports
 run_tests.py     regression suite
 fuzz.py          randomised differential testing
 benchmark.py     experiments
-make_figures.py  regenerate results/figures/
+make_figures.py  regenerate the Graphviz / AIGER artefacts
+make_plots.py    regenerate the result charts (needs matplotlib)
 REPORT.md        full write-up
 ```
 
