@@ -1,0 +1,270 @@
+{
+ "mult_scaling": [
+  {
+   "width": 3,
+   "sat": 0.0008256000000983477,
+   "sweep": 0.0011716000153683126,
+   "bdd_peak": 287
+  },
+  {
+   "width": 4,
+   "sat": 0.004174600006081164,
+   "sweep": 0.005210100003750995,
+   "bdd_peak": 1657
+  },
+  {
+   "width": 5,
+   "sat": 0.026770700002089143,
+   "sweep": 0.037380299996584654,
+   "bdd_peak": 6196
+  },
+  {
+   "width": 6,
+   "sat": 0.13484439998865128,
+   "sweep": 0.1200816000055056,
+   "bdd_peak": 21061
+  },
+  {
+   "width": 7,
+   "sat": 0.48064399999566376,
+   "sweep": 0.6562006000021938,
+   "bdd_peak": 67442
+  },
+  {
+   "width": 8,
+   "sat": 5.123317899997346,
+   "sweep": 4.924786399991717,
+   "bdd_peak": 210561
+  },
+  {
+   "width": 9,
+   "sat": 17.607189300004393,
+   "sweep": 18.06835840002168,
+   "bdd_peak": null
+  }
+ ],
+ "algebraic": [
+  {
+   "width": 3,
+   "time": 0.003314200002932921,
+   "gates": 52,
+   "peak_terms": 46
+  },
+  {
+   "width": 4,
+   "time": 0.005246699991403148,
+   "gates": 116,
+   "peak_terms": 97
+  },
+  {
+   "width": 5,
+   "time": 0.009379199997056276,
+   "gates": 204,
+   "peak_terms": 170
+  },
+  {
+   "width": 6,
+   "time": 0.01582820000476204,
+   "gates": 316,
+   "peak_terms": 186
+  },
+  {
+   "width": 7,
+   "time": 0.014388399984454736,
+   "gates": 452,
+   "peak_terms": 203
+  },
+  {
+   "width": 8,
+   "time": 0.021861899993382394,
+   "gates": 612,
+   "peak_terms": 221
+  },
+  {
+   "width": 9,
+   "time": 0.02724080000189133,
+   "gates": 796,
+   "peak_terms": 240
+  },
+  {
+   "width": 12,
+   "time": 0.04072499999892898,
+   "gates": 1492,
+   "peak_terms": 309
+  },
+  {
+   "width": 16,
+   "time": 0.08489349999581464,
+   "gates": 2756,
+   "peak_terms": 429
+  },
+  {
+   "width": 24,
+   "time": 0.3336249999993015,
+   "gates": 6436,
+   "peak_terms": 765
+  },
+  {
+   "width": 32,
+   "time": 0.898531799990451,
+   "gates": 11652,
+   "peak_terms": 1229
+  },
+  {
+   "width": 48,
+   "time": 3.6646173000044655,
+   "gates": 26692,
+   "peak_terms": 2541
+  },
+  {
+   "width": 64,
+   "time": 11.528669199993601,
+   "gates": 47876,
+   "peak_terms": 4365
+  }
+ ],
+ "ordering": [
+  {
+   "design": "16-bit RCA vs CLA",
+   "interleaved": 4557,
+   "dfs": 843,
+   "declaration": null,
+   "reverse": null
+  },
+  {
+   "design": "16-bit RCA vs KS",
+   "interleaved": 5240,
+   "dfs": 1935,
+   "declaration": null,
+   "reverse": null
+  },
+  {
+   "design": "8-bit ALU",
+   "interleaved": 7498,
+   "dfs": 14643,
+   "declaration": 145318,
+   "reverse": 18489
+  },
+  {
+   "design": "8-bit shifter",
+   "interleaved": 424,
+   "dfs": 290,
+   "declaration": 1624,
+   "reverse": 289
+  },
+  {
+   "design": "popcount",
+   "interleaved": 869,
+   "dfs": 459,
+   "declaration": 869,
+   "reverse": 459
+  },
+  {
+   "design": "6x6 multiplier",
+   "interleaved": 34891,
+   "dfs": 36071,
+   "declaration": 25423,
+   "reverse": 21061
+  }
+ ],
+ "complexity": [
+  {
+   "design": "128-bit adder",
+   "inputs": 257,
+   "gates": 3097,
+   "depth": 268,
+   "clauses": 9292
+  },
+  {
+   "design": "64-bit adder",
+   "inputs": 129,
+   "gates": 1545,
+   "depth": 139,
+   "clauses": 4636
+  },
+  {
+   "design": "32-bit adder",
+   "inputs": 65,
+   "gates": 769,
+   "depth": 74,
+   "clauses": 2308
+  },
+  {
+   "design": "12x12 multiplier",
+   "inputs": 24,
+   "gates": 2645,
+   "depth": 91,
+   "clauses": 7936
+  },
+  {
+   "design": "8x8 multiplier",
+   "inputs": 16,
+   "gates": 1085,
+   "depth": 59,
+   "clauses": 3256
+  },
+  {
+   "design": "16-bit RCA vs KS",
+   "inputs": 33,
+   "gates": 416,
+   "depth": 41,
+   "clauses": 1249
+  },
+  {
+   "design": "16-bit CLA vs KS",
+   "inputs": 33,
+   "gates": 419,
+   "depth": 22,
+   "clauses": 1258
+  },
+  {
+   "design": "16-bit RCA vs CLA",
+   "inputs": 33,
+   "gates": 341,
+   "depth": 41,
+   "clauses": 1024
+  },
+  {
+   "design": "8-bit ALU",
+   "inputs": 19,
+   "gates": 652,
+   "depth": 38,
+   "clauses": 1957
+  },
+  {
+   "design": "8-bit shifter",
+   "inputs": 11,
+   "gates": 165,
+   "depth": 15,
+   "clauses": 496
+  },
+  {
+   "design": "popcount",
+   "inputs": 8,
+   "gates": 159,
+   "depth": 21,
+   "clauses": 478
+  },
+  {
+   "design": "priority encoder",
+   "inputs": 8,
+   "gates": 96,
+   "depth": 21,
+   "clauses": 289
+  },
+  {
+   "design": "Gray roundtrip",
+   "inputs": 8,
+   "gates": 69,
+   "depth": 21,
+   "clauses": 208
+  },
+  {
+   "design": "ISCAS-85 c17",
+   "inputs": 5,
+   "gates": 163,
+   "depth": 54,
+   "clauses": 490
+  }
+ ]
+}

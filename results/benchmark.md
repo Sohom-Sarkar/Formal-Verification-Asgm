@@ -36,16 +36,17 @@ Sweeping pays off exactly when the two designs compute the same intermediate val
 
 ## C. BDD variable ordering
 
-Peak node count for each static heuristic, plus what sifting adds on top of the best of them. `interleaved` alternates input port bits (a0, b0, a1, b1, ...); `dfs` follows a depth-first walk back from the miter output; `declaration` and `reverse` are the naive orders. `overflow` means the build passed 400000 nodes and was abandoned.
+Peak node count for each static heuristic, plus what sifting adds on top of the best of them. `interleaved` alternates input port bits (a0, b0, a1, b1, ...); `dfs` follows a depth-first walk back from the miter output; `declaration` and `reverse` are the naive orders. `overflow` means the build passed 400000 nodes and was abandoned. Each
+strategy is measured independently at the full budget.
 
-| design pair               | interleaved | dfs      | declaration | reverse  | best               | after sifting |
-|---------------------------|-------------|----------|-------------|----------|--------------------|---------------|
-| 16-bit RCA vs CLA         | 4557        | 843      | overflow    | overflow | dfs (843)          | 843           |
-| 16-bit RCA vs Kogge-Stone | 5240        | 1935     | overflow    | overflow | dfs (1935)         | 1935          |
-| 8-bit ALU behav vs struct | 7498        | overflow | overflow    | overflow | interleaved (7498) | 6511          |
-| 8-bit shifter             | 424         | 290      | overflow    | 289      | reverse (289)      | 289           |
-| popcount seq vs tree      | 869         | 459      | overflow    | overflow | dfs (459)          | 459           |
-| 6x6 multiplier            | 34891       | overflow | 25423       | 21061    | reverse (21061)    | 20670         |
+| design pair               | interleaved | dfs   | declaration | reverse  | best               |
+|---------------------------|-------------|-------|-------------|----------|--------------------|
+| 16-bit RCA vs CLA         | 4557        | 843   | overflow    | overflow | dfs (843)          |
+| 16-bit RCA vs Kogge-Stone | 5240        | 1935  | overflow    | overflow | dfs (1935)         |
+| 8-bit ALU behav vs struct | 7498        | 14643 | 145318      | 18489    | interleaved (7498) |
+| 8-bit shifter             | 424         | 290   | 1624        | 289      | reverse (289)      |
+| popcount seq vs tree      | 869         | 459   | 869         | 459      | dfs (459)          |
+| 6x6 multiplier            | 34891       | 36071 | 25423       | 21061    | reverse (21061)    |
 
 
 ## D. SAT solver comparison
