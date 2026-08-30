@@ -1,0 +1,22 @@
+digraph bdd {
+  node [fontname="monospace"];
+  t0 [shape=box, label="0"];
+  t1 [shape=box, label="1"];
+  n6 [shape=circle, label="b[1]"];
+  n6 -> t0 [style=dashed];
+  n6 -> t1 [style=solid];
+  n28 [shape=circle, label="b[1]"];
+  n28 -> t1 [style=dashed];
+  n28 -> t0 [style=solid];
+  n34 [shape=circle, label="a[1]"];
+  n34 -> n6 [style=dashed];
+  n34 -> n28 [style=solid];
+  n35 [shape=circle, label="b[0]"];
+  n35 -> t0 [style=dashed];
+  n35 -> n34 [style=solid];
+  n36 [shape=circle, label="a[0]"];
+  n36 -> t0 [style=dashed];
+  n36 -> n35 [style=solid];
+  root [shape=plaintext, label="miter"];
+  root -> n36;
+}

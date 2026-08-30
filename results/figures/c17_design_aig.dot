@@ -1,0 +1,31 @@
+digraph aig {
+  rankdir=BT;
+  node [fontname="monospace"];
+  n4 [shape=box, style=filled, fillcolor="#dbeafe", label="N6[0]"];
+  n3 [shape=box, style=filled, fillcolor="#dbeafe", label="N3[0]"];
+  n7 [shape=circle, label="&"];
+  n2 [shape=box, style=filled, fillcolor="#dbeafe", label="N2[0]"];
+  n8 [shape=circle, label="&"];
+  n1 [shape=box, style=filled, fillcolor="#dbeafe", label="N1[0]"];
+  n6 [shape=circle, label="&"];
+  n9 [shape=circle, label="&"];
+  n5 [shape=box, style=filled, fillcolor="#dbeafe", label="N7[0]"];
+  n10 [shape=circle, label="&"];
+  n11 [shape=circle, label="&"];
+  n3 -> n7 [style=solid];
+  n4 -> n7 [style=solid];
+  n2 -> n8 [style=solid];
+  n7 -> n8 [style=dashed];
+  n1 -> n6 [style=solid];
+  n3 -> n6 [style=solid];
+  n6 -> n9 [style=dashed];
+  n8 -> n9 [style=dashed];
+  n5 -> n10 [style=solid];
+  n7 -> n10 [style=dashed];
+  n8 -> n11 [style=dashed];
+  n10 -> n11 [style=dashed];
+  o0 [shape=doubleoctagon, style=filled, fillcolor="#fecaca", label="N22"];
+  n9 -> o0 [style=dashed];
+  o1 [shape=doubleoctagon, style=filled, fillcolor="#fecaca", label="N23"];
+  n11 -> o1 [style=dashed];
+}

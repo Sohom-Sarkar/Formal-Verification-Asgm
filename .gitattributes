@@ -1,2 +1,14 @@
-# Auto detect text files and perform LF normalization
-* text=auto
+# Normalise line endings on commit. Without this, files authored on Windows
+# land in the repo with CRLF and every later edit from another OS shows as a
+# whole-file diff.
+* text=auto eol=lf
+
+# Verilog and generated artefacts are text too
+*.v      text eol=lf
+*.aag    text eol=lf
+*.dot    text eol=lf
+*.md     text eol=lf
+*.py     text eol=lf
+
+# Keep the benchmark tables readable in diffs
+results/benchmark.md text eol=lf

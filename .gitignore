@@ -1,0 +1,20 @@
+# virtualenvs
+.venv/
+venv/
+env/
+
+# python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# scratch output from benchmark / test runs
+results/_*
+*.log
+
+# editors
+.vscode/
+.idea/
+*.swp
+.DS_Store

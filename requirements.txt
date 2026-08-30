@@ -1,0 +1,8 @@
+# The only runtime dependency. Everything else in this project is implemented
+# from scratch; PySAT is used purely as the SAT solving engine.
+#
+# Note: three of the ~20 solvers PySAT bundles (kissat404, cryptosat,
+# minisatgh) abort the interpreter on construction under Windows + CPython
+# 3.14. eqcheck/solvers.py screens those out; run `python -m eqcheck.solvers`
+# to re-probe on another machine.
+python-sat>=1.8
