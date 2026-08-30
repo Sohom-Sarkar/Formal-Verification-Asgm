@@ -93,8 +93,7 @@ the entire input space, rather than sampling it.
 ## 2. Why this cannot be done by testing
 
 The naive approach is to enumerate every input combination and compare. This
-fails immediately, and the numbers are worth stating precisely because they
-justify the entire project.
+fails immediately, and by a margin that justifies the entire project.
 
 A 16-bit adder has 33 input bits (16 + 16 + carry-in):
 
@@ -230,17 +229,11 @@ Plus 1,406 lines of test and experiment drivers (`run_tests.py`, `fuzz.py`,
 
 ## 5. The frontend: Verilog to gates
 
-### 5.1 Intuition
+### 5.1 What the frontend has to do
 
-Verilog is a programming language for hardware. It contains loops, conditional
-statements, arithmetic on multi-bit numbers, and module hierarchy. None of that
-exists in silicon, silicon has only gates. The frontend's job is to translate
-one into the other, a process called **elaboration** followed by
-**bit-blasting**.
-
-The analogy: taking a recipe that says "make the sauce" and rewriting it as
-every individual knife stroke and stir. Vastly longer, but every step is now
-the same primitive kind of operation.
+Verilog contains loops, conditionals, arithmetic on multi-bit numbers and module
+hierarchy. None of that exists in silicon, which has only gates. Translating one
+into the other is **elaboration** followed by **bit-blasting**.
 
 ### 5.2 Lexing and parsing
 
@@ -248,7 +241,7 @@ A hand-written tokeniser splits the source into keywords, identifiers, numbers
 and operators, handling comments, compiler directives, and Verilog's sized
 literal syntax (`8'hFF`, `4'b10x1`, `16'sd120`).
 
-One subtlety worth recording: literals may contain `x`, `z` or `?` digits.
+Literals may contain `x`, `z` or `?` digits.
 These are **don't-care** positions in a `casez`/`casex` label. Naively
 substituting zero for them (the obvious implementation) silently
 mis-compiles every priority encoder ever written, because `8'b1???????` would
@@ -361,8 +354,8 @@ first.
 **This is not merely an optimisation.** Both designs are elaborated into *one
 shared graph*. Any logic the two designs construct identically therefore
 collapses to the same nodes, and the XOR comparing them folds to constant
-`FALSE` automatically. In effect, structural hashing performs a free
-equivalence check on every internal signal the two designs happen to share.
+`FALSE` automatically, so structural hashing performs a free equivalence check
+on every internal signal the two designs share.
 
 Measured effect: several test pairs are discharged entirely by this, with no
 solver invoked at all. The tool reports when a verdict came from structural
@@ -377,13 +370,7 @@ CNF level, see §17.6.
 
 ## 7. The miter construction
 
-### 7.1 Intuition
-
-Two calculators wired to a single keypad, with a buzzer that sounds the instant
-they disagree about anything. The verification question becomes: *can the
-buzzer ever sound?*
-
-### 7.2 Algorithm
+### 7.1 Algorithm
 
 Following Brand (ICCAD 1993):
 
@@ -410,13 +397,10 @@ meaningful. Two circuits on separate inputs could differ trivially.
 
 ## 8. Decision procedure 1: random simulation
 
-### 8.1 Intuition
+### 8.1 Bit-parallel evaluation
 
-Most real bugs are shallow. A swapped operand or an inverted select is exposed
-by almost any random input. Spending a solver call to discover that is
-wasteful, so the pipeline tries brute force first, briefly.
-
-### 8.2 Algorithm: bit-parallel evaluation
+Most real bugs are shallow: a swapped operand or an inverted select is exposed
+by almost any random input, so the pipeline tries brute force first.
 
 Rather than simulating one input vector at a time, each node carries a
 **signature**: a Python integer used as a bit-vector, where bit *k* holds that
@@ -434,7 +418,7 @@ If any bit of the miter's signature is 1, that bit index identifies a random
 vector on which the designs differ — a counterexample, obtained without a
 solver.
 
-### 8.3 The second use: sound candidate filtering
+### 8.2 The second use: sound candidate filtering
 
 Signatures also underpin SAT sweeping. If two nodes are functionally
 equivalent, their signatures **must** match on every vector. Contrapositively,
@@ -445,7 +429,7 @@ equivalence, they only prevent the solver being asked about hopeless pairs.
 Matching signatures are necessary but not sufficient, so every surviving
 candidate is still proved properly.
 
-### 8.4 Result
+### 8.3 Result
 
 Both deliberately buggy designs are refuted in **under one millisecond**. Across
 500 fuzzing rounds, random simulation resolved **481 of the verdicts**.
@@ -457,15 +441,11 @@ Both deliberately buggy designs are refuted in **under one millisecond**. Across
 Based on Kuehlmann & Krohm (DAC 1997), the technique that made industrial
 equivalence checking scale.
 
-### 9.1 Intuition
+### 9.1 Motivation
 
 A plain output miter discards everything the two designs have in common. Two
-implementations of the same adder compute the *same internal carries*; proving
+implementations of the same adder compute the same internal carries, and proving
 the outputs equal from scratch throws that away.
-
-The analogy: two students hand in the same long multiplication. Rather than
-comparing only the final answers, compare their intermediate lines. Matching
-intermediate results turn one hard comparison into several easy ones.
 
 ### 9.2 Algorithm
 
@@ -648,14 +628,10 @@ one could not take the probe down with it.
 
 ## 11. Decision procedure 4: ROBDD
 
-### 11.1 Intuition
+### 11.1 Canonicity
 
 A **Reduced Ordered Binary Decision Diagram** is a canonical compressed form of
-a Boolean function. The analogy is reducing fractions to lowest terms: is 6/8
-the same as 9/12? Reduce both and each becomes 3/4, at which point equality is
-immediate.
-
-For a fixed variable order, ROBDDs are **canonical** (Bryant, 1986): two
+a Boolean function. For a fixed variable order, ROBDDs are **canonical** (Bryant, 1986): two
 functions are equal *if and only if* their ROBDDs are the identical node. So
 equivalence requires no search at all — the miter is unsatisfiable exactly when
 its BDD is the `FALSE` terminal.
@@ -711,13 +687,10 @@ This backend was added after measurement showed multipliers to be the one case
 where every search-based method fails. It follows the AMulet line of work
 (Kaufmann, Biere & Kauers).
 
-### 12.1 Intuition
+### 12.1 The formulation
 
-Search is the wrong paradigm for arithmetic. A multiplier is not a puzzle to be
-searched; it is an *algebraic identity* to be verified. So verify it
-algebraically.
-
-### 12.2 The formulation
+Search is the wrong paradigm for arithmetic. A multiplier is an algebraic
+identity, so it is verified algebraically.
 
 Work in `Z[x₁, …, xₙ]` modulo the Boolean relations `x² = x`. Each AIG AND node
 becomes a polynomial equation:
@@ -736,7 +709,7 @@ SPEC  =  Σ 2^i·p_i  −  (Σ 2^i·a_i)·(Σ 2^j·b_j)
 The circuit is a correct multiplier **exactly when `SPEC` reduces to zero**
 modulo the gate relations.
 
-### 12.3 Why this is cheap
+### 12.2 Why this is cheap
 
 Reduction modulo an arbitrary set of polynomials requires a **Gröbner basis**,
 whose computation is doubly exponential, which would make this useless.
@@ -748,7 +721,7 @@ gate is greater than its inputs. Reduction then degenerates into plain
 the outputs first, walk back toward the inputs, and check that everything
 cancels. No Buchberger algorithm, no basis computation.
 
-### 12.4 Representation
+### 12.3 Representation
 
 Because `x² = x`, exponents never exceed one, so a **monomial is simply a set of
 variables**. A polynomial is therefore a dictionary:
@@ -761,7 +734,7 @@ Multiplying two monomials is a **set union**. Substituting `v := P` splits the
 polynomial as `S = v·Q + R` (monomials containing `v`, with `v` removed, versus
 the rest) and rewrites it as `P·Q + R`.
 
-### 12.5 Results
+### 12.4 Results
 
 | Multiplier width | Gates | Peak polynomial terms | Algebraic | Plain SAT |
 |---:|---:|---:|---:|---:|
@@ -781,7 +754,7 @@ amount of CDCL would ever finish.
 Peak polynomial size grows approximately quadratically in width (221 terms at
 8 bits, 4,365 at 64), which is why the method scales where search does not.
 
-### 12.6 A stronger statement than equivalence
+### 12.5 A stronger statement than equivalence
 
 This backend verifies each design against the **arithmetic specification
 itself**, not against the other design. No miter is constructed. Equivalence
@@ -792,7 +765,7 @@ This is how arithmetic circuits are actually verified in industry, and it means
 cost depends on each circuit separately rather than on how differently the two
 are structured.
 
-### 12.7 The catch: proving is cheap, refuting is not
+### 12.6 The catch: proving is cheap, refuting is not
 
 The method is sharply asymmetric:
 
@@ -980,7 +953,7 @@ piece of evidence is not a size figure but a runtime: the 12x12 multiplier
 takes **11,509 seconds of CDCL search** to prove by the plain miter (§16.5), so
 it is emphatically not a toy. The 128-bit adder has an input space of `2^257`,
 larger than the number of atoms in the observable universe, and the algebraic
-backend proves a 64x64 multiplier of 47,876 gates (§12.5).
+backend proves a 64x64 multiplier of 47,876 gates (§12.4).
 
 The last four rows are small, and are included deliberately for reasons other
 than size: c17 is the standard published ISCAS-85 benchmark and carries
