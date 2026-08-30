@@ -241,7 +241,7 @@ a widened comparison is never zero, so the condition was always true.
 ## Test cases
 
 Fourteen pairs, each a different topology rather than a cosmetic edit. Measured
-complexity for all of them is in [REPORT.md §14.1](REPORT.md); the largest are a
+complexity for all of them is tabulated in [REPORT.md](REPORT.md); the largest are a
 128-bit adder comparison (257 inputs, 3,097 miter gates, `2^257` input space)
 and a 12x12 multiplier that takes over three hours of SAT search.
 
