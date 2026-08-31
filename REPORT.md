@@ -30,12 +30,11 @@ algebraic engine, fault localiser, AIGER/Graphviz export. PySAT provides the
 solver. 5,411 lines across 17 modules, plus 1,406 lines of test and experiment
 drivers.
 
-I deliberately did not use Yosys as a frontend. Yosys can do the whole
-assignment on its own (`miter -equiv` then `sat -verify`), which would have
-made this a wrapper. Writing the parser also turned out to enable two later
-features: hierarchical signal names for fault localisation, and direct
-structural access for the algebraic backend. The cost is a restricted Verilog
-subset.
+We did not use Yosys as a frontend. Yosys can do the whole assignment on its
+own (`miter -equiv` then `sat -verify`), which would have made this a wrapper.
+Writing the parser also turned out to enable two later features: hierarchical
+signal names for fault localisation, and direct structural access for the
+algebraic backend. The cost is a restricted Verilog subset.
 
 All engines consume one intermediate representation, an And-Inverter Graph, so
 the frontend is written once and five decision procedures share it.
@@ -100,11 +99,10 @@ per bit whether it is assigned on every path, taking the AND of both arms when
 merging an `if`/`else`. A bit that is not gets a warning, because that is where
 a synthesiser infers a latch and the design is not really combinational.
 
-Operator bit-blasting: `+` is a ripple-carry chain, `-` is `a + ~b + 1`, `*` is
-shift-and-add, `<` is the borrow out of `a + ~b + 1`, variable shifts become a
-logarithmic barrel shifter, `==` is an AND of XNORs. `always` blocks execute
-symbolically, with `if`/`else` multiplexing the two branch environments and
-`case` folding in reverse so the first match wins.
+Operator bit-blasting: `-` is `a + ~b + 1`, `*` is shift-and-add, `<` is the
+borrow out of the same subtraction, a variable shift becomes a logarithmic
+barrel shifter. `always` blocks execute symbolically, `case` folding in reverse
+so the first match wins.
 
 Supported: ANSI and non-ANSI ports, vectors and part-selects, `assign`, gate
 primitives, hierarchy, parameters, nested generate loops, generate-`if`,
@@ -190,10 +188,10 @@ by the time the walk reaches the output, both sides are the same node and the
 XOR folds to `FALSE`.
 
 Refuted candidates feed their counterexample back into the simulator, which
-splits the signature class so the same wrong guess is not repeated. **I
-documented this step and then never wired it up** — the counterexamples were
+splits the signature class so the same wrong guess is not repeated. We
+documented this step and then never wired it up — the counterexamples were
 appended to a list nothing read. Fixing it cut wasted solver calls on the
-Kogge-Stone pair from 435 to 71, and total calls from 528 to 114. I found it
+Kogge-Stone pair from 435 to 71, and total calls from 528 to 114. We found it
 while writing the algorithm description for this report.
 
 Sweeping is sound (every merge has an UNSAT proof) and complete (if the root
@@ -202,38 +200,28 @@ help or waste time.
 
 ### Tseitin encoding and SAT
 
-The naive circuit-to-CNF conversion substitutes gate definitions until
-everything is in terms of the inputs, which duplicates any node feeding two
-parents and turns a chain of *n* XORs into 2^n terms.
-
-Tseitin's fix is to give every internal wire a variable. For an AND node, `c ↔
-(a ∧ b)` splits into three clauses:
+Substituting gate definitions until everything is in terms of the inputs
+duplicates any node feeding two parents, turning a chain of *n* XORs into 2^n
+terms. Tseitin's fix is a variable per internal wire, so `c ↔ (a ∧ b)` becomes
 
 ```
 (¬c ∨ a)   (¬c ∨ b)   (c ∨ ¬a ∨ ¬b)
 ```
 
-One variable and three clauses per gate, linear in circuit size. Not logically
-equivalent to the original (it has extra variables) but equisatisfiable, which
-is all that is needed. Inverters cost nothing because inversion is a sign flip
-on the DIMACS literal. DIMACS variable 1 is pinned false and stands for the AIG
-constant, which removes special-casing everywhere else. Only the miter cone is
-encoded.
+Three clauses and one variable per gate, linear in circuit size, and
+equisatisfiable rather than equivalent, which is all that is needed. Inverters
+are free, since inversion is a sign flip on the literal. Variable 1 is pinned
+false and stands for the AIG constant. Only the miter cone is encoded: the
+16-bit ripple-vs-CLA miter is 335 AND nodes, 375 variables, 1,025 clauses.
 
-The 16-bit ripple-vs-CLA miter is 335 AND nodes, 375 variables, 1,025 clauses.
+CaDiCaL then runs CDCL. Learning is what separates this from brute force, since
+a learned clause rules out an exponentially large family of assignments rather
+than one. The 128-bit adder settles 2^257 input vectors in about 0.15 s.
 
-CaDiCaL then runs CDCL: propagate, decide, and on a conflict derive a learned
-clause from the implication graph and backjump. Learning is what separates this
-from brute force — a learned clause rules out an exponentially large family of
-assignments, not one. The 128-bit adder settles 2^257 input vectors in about
-0.15 s, which no enumeration could approach.
-
-On solver screening: PySAT bundles about twenty solvers and three of them
-(`kissat404`, `cryptosat`, `minisatgh`) abort the process on construction under
-Windows/CPython 3.14, which try/except cannot catch. I found this when a
-benchmark run died with a segfault. `solvers.py` screens names before
-construction and lists the 17 that work. Each was probed in a subprocess so a
-crashing one could not take the probe down.
+Three of PySAT's twenty solvers (`kissat404`, `cryptosat`, `minisatgh`) abort
+the process on construction under Windows/CPython 3.14, which try/except cannot
+catch; we found this when a benchmark died with a segfault. `solvers.py`
+screens names before construction, each having been probed in a subprocess.
 
 ## BDD backend
 
@@ -314,11 +302,11 @@ Three things turn "they differ" into something a designer can act on.
 
 A care set is valid when fixing it *forces* the miter to 1, so the test for
 dropping a bit is that `solve([miter = 0] + remaining)` stays UNSAT — not "is
-the miter still satisfiable", which it always is. I got this wrong first time
-round and the criterion freed every bit, reporting a care set of size zero. On
-the buggy adder it cuts 33 input bits to 8, `a[3:6]` and `b[3:6]`, which is
-exactly one carry-lookahead block's inputs plus its carry source. Verified
-independently: 200 of 200 random completions still expose the bug.
+the miter still satisfiable", which it always is. We got this wrong first time
+round and the criterion freed every bit. On the buggy adder it cuts 33 input
+bits to 8, `a[3:6]` and `b[3:6]`, exactly one carry-lookahead block's inputs
+plus its carry source; 200 of 200 random completions of that set still expose
+the bug.
 
 ### Fault localisation
 
@@ -337,7 +325,7 @@ everything outside `n`'s fan-out cone, so this costs far less than two
 circuits. Only gates feeding a failing output are considered.
 
 On a 16-bit ripple-carry adder with one broken gate: 142-gate cone, 55
-candidates examined, **one survivor, `c[10]`** — the gate I broke. Candidates
+candidates examined, **one survivor, `c[10]`** — the gate we broke. Candidates
 are reported by hierarchical Verilog name (`u0.c[3]`, not `node 61`), which
 needed the elaborator to retain every scope.
 
@@ -354,7 +342,7 @@ verified exactly by enumerating all `2^|S|` forcings.
 On the carry-lookahead bug it reports no single fix, minimum size 4, and
 verifies `{u0.g[0], u1.g[0], u2.g[0], u3.g[0]}` — one gate per instance.
 
-Two caveats the tool prints itself. Many gate sets can repair a design: I
+Two caveats the tool prints itself. Many gate sets can repair a design: we
 checked directly that the true fault set `{u0.c[3]…u3.c[3]}` is also valid, so
 the true fault is guaranteed to be *among* the diagnoses but not to rank first.
 And a diagnosis made entirely of primary outputs is always valid and always
@@ -405,23 +393,20 @@ driving the comparison, after structural hashing.
 | Gray roundtrip vs identity | 8 | 2^8 | 69 | 21 | 208 |
 | ISCAS-85 c17 | 5 | 2^5 | 163 | 54 | 490 |
 
-Eight of the fourteen are substantial. The clearest evidence is not a size
-figure but a runtime: the 12×12 multiplier takes 11,509 seconds of CDCL to
-prove by the plain miter, so it is not a toy.
+Eight of the fourteen are substantial, and the clearest evidence is a runtime
+rather than a size: the 12x12 multiplier takes 11,509 seconds of CDCL to prove
+by the plain miter. The last four rows are small and are there for other
+reasons — c17 is the standard ISCAS-85 benchmark, the Gray roundtrip is
+interesting for its property, the priority encoder is the only `casez`
+coverage, the shifter covers the barrel and crossbar paths cheaply — so they
+supplement the suite rather than carry it.
 
-The last four rows are small and are there for reasons other than size. c17 is
-the standard ISCAS-85 benchmark; the Gray roundtrip is interesting for its
-property (encode composed with decode is the identity, though nothing in the
-circuit says so); the priority encoder is the only `casez` coverage; the
-shifter covers the barrel and crossbar paths cheaply. They supplement the suite
-rather than carry it.
-
-Cases 4 and 14 are parameterised and drive the scaling studies. Case 2 and 3
-exercise nested generate loops with an inner generate-`if`, which is the most
-demanding frontend construct here. The c17 truth table was generated from the
-published c17 function, not from this tool's simulator, so the comparison is
-independent. Case 6 exists because 5 and 8 are both multi-fault and cannot
-exercise single-fix localisation.
+Cases 4 and 14 are parameterised and drive the scaling studies. Cases 2 and 3
+exercise nested generate loops with an inner generate-`if`, the most demanding
+frontend construct here. The c17 truth table was generated from the published
+function rather than from our simulator, so the comparison is independent. Case
+6 exists because 5 and 8 are both multi-fault and cannot exercise single-fix
+localisation.
 
 ## Validation
 
@@ -441,19 +426,18 @@ broken. These are the only tests where the correct answer is known exactly.
 7. The algebraic backend must prove genuine multipliers and refuse to prove four
 deliberately corrupted ones.
 
-`fuzz.py` covers the designs I did not think to write. Each round generates a
-random circuit A, rewrites it into B using only semantics-preserving
-transformations (De Morgan, XOR expansion, commutation, double negation,
-two's-complement subtraction, redundancy insertion), and mutates it into C by
-corrupting one operator. Ground truth comes from exhaustive simulation, which
-is independent of the checker, and the checker must agree on both pairs with
-every counterexample reproducing.
+`fuzz.py` covers the designs we did not think to write. Each round generates a
+random circuit A, rewrites it into B by semantics-preserving transformations
+only (De Morgan, XOR expansion, commutation, redundancy insertion), and mutates
+it into C by corrupting one operator. Ground truth comes from exhaustive
+simulation, independent of the checker, and every counterexample must
+reproduce.
 
 More than 1,500 rounds across eight seeds during development, zero
 disagreements. Around 4% of mutations turn out to be behaviour-preserving by
 accident and are correctly called equivalent.
 
-The fuzzer paid for itself on its first run by finding a bug in one of my
+The fuzzer paid for itself on its first run by finding a bug in one of our
 rewrite rules: `~{2'd0, (c == 0)}` was being used to invert a mux condition,
 but a bitwise complement of a widened comparison is never zero, so the
 "inverted" condition was always true. That was the test generator rather than
@@ -461,124 +445,98 @@ the checker, but it is exactly the sort of thing hand-written tests never
 catch.
 
 The miter also exports to AIGER for independent checking with ABC, and to
-DIMACS. I validated the AIGER writer by writing a separate reader and
+DIMACS. We validated the AIGER writer by writing a separate reader and
 confirming it agreed with the internal simulator on 400 of 400 random vectors.
 
 ## Results
 
-Full tables in `results/benchmark.md`. Single-threaded, one machine.
+Full tables in `results/benchmark.md`. Single-threaded, one machine. Almost
+every conclusion below started as a different expectation.
 
 ![Multiplier scaling](results/figures/scaling.png)
 
-The left panel is the whole story of this project in one picture: SAT and
-sweeping go vertical somewhere past width 9, while algebraic reduction stays
-flat out to 64 bits. The right panel is the same miters under BDD, which runs
-out of budget at width 9.
+The left panel is the project in one picture: SAT and sweeping go vertical past
+width 9, while algebraic reduction stays flat out to 64 bits. The right panel
+is the same miters under BDD, which runs out of budget at width 9.
 
-Multiplier scaling:
+### BDDs hit a wall, SAT bends
 
-| Width | Miter gates | CNF clauses | SAT | SAT+sweep | BDD peak nodes |
-|---:|---:|---:|---:|---:|---:|
-| 5 | 363 | 1,070 | 0.071 s | 0.087 s | 6,196 |
-| 6 | 564 | 1,673 | 0.365 s | 0.304 s | 21,061 |
-| 7 | 807 | 2,402 | 1.388 s | 1.561 s | 67,442 |
-| 8 | 1,092 | 3,257 | 8.515 s | 8.977 s | 210,561 |
-| 9 | 1,419 | 4,238 | 33.03 s | 46.58 s | > 400,000 |
+Multiplier BDD size roughly triples per added bit and blows a 400,000-node
+budget at width 9, where SAT still finishes in 33 s. Bryant's 1991 result in
+miniature: multiplier BDDs are exponential in every variable order, so no
+heuristic rescues them.
 
-BDD variable ordering, where `overflow` means past a 400,000-node budget:
+### SAT sweeping has a crossover, and loses on easy instances
 
-![BDD variable ordering](results/figures/bdd_ordering.png)
+We expected it to help uniformly. It carries a fixed overhead, so at widths 8
+and 9 that overhead exceeds what the merges save (0.94x and 0.71x, a loss). But
+the plain miter is one monolithic UNSAT proof whose cost explodes: 33 s at
+width 9 to 11,509 s at width 12, a factor of 350 for three extra bits. Sweeping
+decomposes it into about 73 small solves and at width 12 wins 3.57x, 3,227 s
+against 11,509 s.
 
-| Design pair | interleaved | dfs | declaration | reverse |
-|---|---:|---:|---:|---:|
-| 16-bit RCA vs CLA | 4,557 | **843** | overflow | overflow |
-| 16-bit RCA vs Kogge-Stone | 5,240 | **1,935** | overflow | overflow |
-| 8-bit ALU | **7,498** | 14,643 | 145,318 | 18,489 |
-| 8-bit shifter | 424 | 290 | 1,624 | **289** |
-| popcount | 869 | **459** | 869 | 459 |
-| 6×6 multiplier | 34,891 | 36,071 | 25,423 | **21,061** |
+The striking part is that the width-12 win comes from only 21 merges in a
+2,645-node cone. A few well-placed internal equivalences break one intractable
+proof into many tractable ones, which is the argument for sweeping in
+industrial tools: it changes the shape of the curve on hard instances rather
+than helping easy ones.
 
-Sweeping discharges eight of nine pairs entirely bottom-up, cone to zero. The
-16-bit RCA-vs-CLA cone collapses from 341 nodes after 12 merges.
+### Brute force beats SAT on multipliers
 
-Solvers on the same 8×8 CNF: CaDiCaL 1.5.3 11.37 s, CaDiCaL 1.9.5 11.54 s,
-MiniSat 15.46 s, Glucose 16.66 s, MapleSAT 17.47 s, Lingeling 26.98 s. Tseitin
-encoding is 3–11 ms throughout.
-
-Adder width, ripple against carry-select: at 128 bits (257 inputs, 3,132 AIG
-nodes, depth 268) the frontend takes 0.239 s and the solver 0.150 s.
-
-## What the measurements changed
-
-Almost every conclusion here started as a different expectation.
-
-SAT sweeping turned out to have a crossover, and to lose on easy instances. I
-expected it to help uniformly. It carries a fixed overhead — simulate,
-classify, run dozens of small solves — and at widths 8 and 9 that overhead
-exceeds what the merges save (0.94× and 0.71×, so a loss). But the plain miter
-is one monolithic UNSAT proof whose cost explodes: 33 s at width 9 to 11,509 s
-at width 12, a factor of 350 for three extra bits. Sweeping decomposes it into
-about 73 small solves, and at width 12 wins 3.57× (3,227 s against 11,509 s).
-The curves cross somewhere between 9 and 12.
-
-The striking part is that the width-12 win comes from only **21 merges in a
-2,645-node cone**. It is not bulk simplification. A few well-placed internal
-equivalences break one intractable proof into many tractable ones, which is
-exactly the argument for sweeping in industrial tools: it changes the shape of
-the curve on hard instances rather than helping easy ones.
-
-Brute force beats SAT on multipliers. I had been presenting the multiplier SAT
-times as "the cost of proof" until I measured exhaustive simulation properly.
-Evaluating all 16.7 million inputs of the 12×12 miter, bit-parallel, takes
-**5.4 seconds** against SAT's 11,509 — brute force wins by 2,100×.
+We had been presenting the multiplier SAT times as "the cost of proof" until we
+measured exhaustive simulation properly. Evaluating all 16.7 million inputs of
+the 12x12 miter, bit-parallel, takes 5.4 seconds against SAT's 11,509, so brute
+force wins by 2,100x.
 
 That is not a contradiction with the 128-bit adder result, because the two
 measure different axes. Input count decides whether enumeration is possible at
-all (24 inputs trivial, 257 inputs impossible forever). Structural hardness
-decides whether SAT is fast (adders easy at any width, multipliers pathological
-at any width). Multipliers sit in the awkward corner of few inputs and brutal
-structure, so enumeration wins; wide adders sit in the opposite corner. The
-practical conclusion is to pick the engine by input count as well as structure.
+all (24 inputs trivial, 257 impossible forever). Structural hardness decides
+whether SAT is fast (adders easy at any width, multipliers pathological at any
+width). Multipliers sit in the awkward corner of few inputs and brutal
+structure; wide adders sit in the opposite one. Pick the engine by input count
+as well as by structure.
 
-No ordering heuristic dominates. DFS is 5.4× better than interleaved on the
-16-bit adder (843 nodes against 4,557) and the worst of the four on the ALU
-(14,643 against 7,498). On the multiplier `reverse` wins at 21,061 and
-interleaved is 66% worse. Only declaration and reverse ever blow the budget
-outright, and only on the two 16-bit adders. Since optimal ordering is NP-hard
-this is why `auto` beats committing to a rule, and why sifting adds 13% on the
-ALU, 2% on the multiplier and nothing on the four designs where the best static
-order was already good.
+### No ordering heuristic dominates
 
-Measuring this correctly took a second attempt. The first version of the table
-reused the per-strategy numbers from `best_static_order`, which caps each
-attempt at the best size found so far - sensible when picking a winner, but it
-makes "overflow" mean "worse than the incumbent" rather than "past the budget".
-Three designs were reported as overflowing when they finish comfortably. The
-figure is what exposed it, because the bars disagreed with the table.
+![BDD variable ordering](results/figures/bdd_ordering.png)
 
-BDDs hit a wall while SAT bends. Multiplier BDD size roughly triples per added
-bit and blows the budget at width 9, where SAT still finishes in 33 s. Bryant's
-1991 result in miniature: multiplier BDDs are exponential in every variable
-order, so no heuristic rescues them.
+DFS is 5.4x better than interleaved on the 16-bit adder (843 nodes against
+4,557) and the worst of the four on the ALU (14,643 against 7,498). On the
+multiplier `reverse` wins at 21,061. Only declaration and reverse ever blow the
+budget outright, and only on the two 16-bit adders. Since optimal ordering is
+NP-hard this is why `auto` beats committing to a rule, and why sifting adds 13%
+on the ALU, 2% on the multiplier and nothing elsewhere.
 
-Two of the techniques here turn out to be current state of the art. CaDiCaL's
-SAT Competition 2025 entry lists "clausal congruence closure" and "clausal
-equivalence sweeping" among its new techniques, and Kissat won three golds in
-2024 largely on them. Those are structural hashing and SAT sweeping performed
-at the CNF level — stages 1 and 3 here, done at circuit level because the
-circuit is available, where Kissat has to reconstruct it from clauses.
+Measuring this took a second attempt. The first table reused the per-strategy
+numbers from `best_static_order`, which caps each attempt at the best size so
+far, so "overflow" meant "worse than the incumbent" rather than "past the
+budget". Three designs were reported as overflowing when they finish
+comfortably. The figure exposed it, because the bars disagreed with the table.
 
-Algebraic methods are categorically better for arithmetic, by a factor of
-340,000 on the 12×12 multiplier. Not an incremental improvement but a change of
-paradigm, from search to symbolic computation.
+### Two of these techniques are current state of the art
+
+CaDiCaL's SAT Competition 2025 entry lists "clausal congruence closure" and
+"clausal equivalence sweeping" among its new techniques, and Kissat won three
+golds in 2024 largely on them. Those are structural hashing and SAT sweeping at
+the CNF level, which are stages 1 and 3 here, done at circuit level because the
+circuit is available.
+
+### Smaller results
+
+Random simulation resolved 481 of 500 fuzz verdicts and refutes both buggy
+designs in under a millisecond. Solver choice matters about 2.4x on the same
+8x8 CNF (CaDiCaL 11.4 s, Lingeling 27.0 s), while Tseitin encoding is 3-11 ms
+throughout. Past a certain size the frontend dominates: the 128-bit adder
+spends 0.239 s in elaboration against 0.150 s in the solver.
+
 
 ## Limitations
 
 - Verilog subset: no sequential logic, division/modulo, `x`/`z` as values, or
 memory arrays. All raise explicit errors.
 - Multi-fault diagnosis ranking is heuristic. The true fault is guaranteed to be
-among the valid diagnoses, not to be listed first, and I verified this directly
-on the CLA case.
+among the valid diagnoses, not to be listed first, and we verified this
+directly on the CLA case.
 - The algebraic backend is the core method, not AMulet, so a heavily
 restructured multiplier can still exhaust the term budget. That is reported as
 inconclusive.
@@ -593,7 +551,7 @@ inside it, which is why the sweeping crossover is stated as a range.
 fixed.
 - No proof certificate. An UNSAT verdict is trusted from the solver. Emitting
 DRUP certificates and checking them independently is feasible — PySAT produced
-a 317-line proof for the adder miter when I tested it — but not implemented.
+a 317-line proof for the adder miter when we tested it — but not implemented.
 
 ## Conclusion
 
@@ -604,9 +562,9 @@ that would have to change. For arithmetic circuits it skips equivalence
 checking altogether and proves the design against its mathematical
 specification.
 
-Flattening everything to one AIG and building a miter was the decision that
-paid off most: one frontend serves five decision procedures, and structural
-hashing ends up doing real verification work for free.
+Flattening to one AIG was the decision that paid off most: one frontend serves
+five decision procedures, and structural hashing does real verification work
+for free.
 
 Three genuine defects turned up during the work — a minimisation criterion that
 asked the wrong question, a sweeping refinement loop that was documented but
