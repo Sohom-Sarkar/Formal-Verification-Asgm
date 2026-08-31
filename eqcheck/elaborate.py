@@ -92,8 +92,6 @@ class Elaborator:
         if self._warn_sink:
             self._warn_sink(message)
 
-    # ------------------------------------------------------------------ entry
-
     def elaborate_top(self, top_name, input_lits=None, param_overrides=None):
         """Elaborate `top_name` as the design root.
 
@@ -125,8 +123,6 @@ class Elaborator:
                 outputs.append((name, signal, bits))
         return scope, outputs
 
-    # -------------------------------------------------------- scope construction
-
     def _build_scope(self, module, path, param_overrides):
         scope = Scope(module.name, path, self)
         self.scopes.append(scope)
@@ -136,9 +132,9 @@ class Elaborator:
                                    collect_params=True)
 
         # 2. declarations
-        for item in items:
-            if isinstance(item, vast.Decl):
-                self._declare(scope, item)
+        for member in items:
+            if isinstance(member, vast.Decl):
+                self._declare(scope, member)
 
         # Ports named in a non-ANSI header but declared later are already
         # handled, because declarations were processed above.
@@ -150,8 +146,8 @@ class Elaborator:
                 scope.signals[name] = Signal(name, 0, 0, None, False, False)
 
         # 3. drivers
-        for item in items:
-            self._register_driver(scope, item)
+        for member in items:
+            self._register_driver(scope, member)
 
         return scope
 
@@ -176,7 +172,7 @@ class Elaborator:
 
     def _expand_items(self, items, scope, param_overrides, collect_params=False):
         """Flatten generate constructs and evaluate parameters."""
-        out = []
+        flat = []
         for item in items:
             if isinstance(item, vast.ParamDecl):
                 if item.name in param_overrides and not item.local:
@@ -187,18 +183,18 @@ class Elaborator:
             if isinstance(item, vast.GenvarDecl):
                 continue
             if isinstance(item, vast.GenerateBlock):
-                out.extend(self._expand_items(item.items, scope, param_overrides))
+                flat.extend(self._expand_items(item.items, scope, param_overrides))
                 continue
             if isinstance(item, vast.For):
-                out.extend(self._unroll_generate_for(item, scope, param_overrides))
+                flat.extend(self._unroll_generate_for(item, scope, param_overrides))
                 continue
             if isinstance(item, vast.If) and not isinstance(item, vast.Always):
                 # generate-if: pick the taken branch at elaboration time
                 taken = item.then_body if self.const_eval(item.cond, scope) else item.else_body
                 if taken is not None:
-                    out.extend(self._expand_items([taken], scope, param_overrides))
+                    flat.extend(self._expand_items([taken], scope, param_overrides))
                 continue
-            out.append(item)
+            flat.append(item)
 
         # Any parameter override naming a parameter the module does not declare
         # is almost certainly a typo, so surface it.
@@ -206,10 +202,10 @@ class Elaborator:
             if key not in scope.params:
                 self.warn("parameter override %r does not exist in module %r"
                           % (key, scope.module_name))
-        return out
+        return flat
 
     def _unroll_generate_for(self, loop, scope, param_overrides):
-        out = []
+        unrolled = []
         index = self.const_eval(loop.start, scope)
         guard = 0
         while True:
@@ -226,34 +222,34 @@ class Elaborator:
                     local_names.update(item.names)
             body = _substitute(copy.deepcopy(loop.body), {loop.var: index},
                                local_names, "$%d" % index)
-            out.extend(self._expand_items(body.items, scope, {}))
+            unrolled.extend(self._expand_items(body.items, scope, {}))
 
             index = self.const_eval(loop.step, scope)
         scope.params.pop(loop.var, None)
-        return out
+        return unrolled
 
-    def _register_driver(self, scope, item):
-        if isinstance(item, vast.Decl):
+    def _register_driver(self, scope, member):
+        if isinstance(member, vast.Decl):
             return
-        if isinstance(item, vast.Assign):
-            driver = Driver("assign", item, scope)
-            self._claim_targets(scope, item.target, driver)
-        elif isinstance(item, vast.GateInst):
-            driver = Driver("gate", item, scope)
-            self._claim_targets(scope, item.terminals[0], driver)
-        elif isinstance(item, vast.ModuleInst):
-            driver = Driver("inst", item, scope)
-            child = self.modules.get(item.module_name)
+        if isinstance(member, vast.Assign):
+            driver = Driver("assign", member, scope)
+            self._claim_targets(scope, member.target, driver)
+        elif isinstance(member, vast.GateInst):
+            driver = Driver("gate", member, scope)
+            self._claim_targets(scope, member.terminals[0], driver)
+        elif isinstance(member, vast.ModuleInst):
+            driver = Driver("inst", member, scope)
+            child = self.modules.get(member.module_name)
             if child is None:
                 raise ElaborationError("instantiated module %r is not defined"
-                                       % item.module_name)
+                                       % member.module_name)
             child_ports = self._port_directions(child)
-            for pname, expr in self._named_connections(item, child):
+            for pname, expr in self._named_connections(member, child):
                 if child_ports.get(pname) == "output" and expr is not None:
                     self._claim_targets(scope, expr, driver)
-        elif isinstance(item, vast.Always):
-            driver = Driver("always", item, scope)
-            for name, positions in _always_targets(item.body, scope, self).items():
+        elif isinstance(member, vast.Always):
+            driver = Driver("always", member, scope)
+            for name, positions in _always_targets(member.body, scope, self).items():
                 for pos in positions:
                     scope.bit_driver[(name, pos)] = driver
         else:
@@ -296,10 +292,10 @@ class Elaborator:
 
     def _port_directions(self, module):
         directions = {}
-        for item in module.items:
-            if isinstance(item, vast.Decl) and item.direction:
-                for name in item.names:
-                    directions[name] = item.direction
+        for decl in module.items:
+            if isinstance(decl, vast.Decl) and decl.direction:
+                for name in decl.names:
+                    directions[name] = decl.direction
         return directions
 
     def _named_connections(self, inst, child):
@@ -308,8 +304,6 @@ class Elaborator:
             # positional
             return list(zip(child.ports, [expr for _, expr in connections]))
         return connections
-
-    # ------------------------------------------------------- constant evaluation
 
     def const_eval(self, expr, scope):
         """Evaluate a constant expression to a Python int."""
@@ -353,8 +347,6 @@ class Elaborator:
                     if self.const_eval(expr.cond, scope)
                     else self.const_eval(expr.else_expr, scope))
         raise ElaborationError("expression is not constant: %r" % (expr,))
-
-    # ---------------------------------------------------------------- resolution
 
     def resolve_bit(self, scope, name, pos):
         signal = scope.signal(name)
@@ -418,29 +410,29 @@ class Elaborator:
         if gate in ("buf", "not"):
             # buf/not may have multiple outputs and exactly one final input
             inputs = self.eval_expr(terminals[-1], scope, 1)
-            value = inputs[0] if inputs else FALSE
+            driven = inputs[0] if inputs else FALSE
             if gate == "not":
-                value = neg(value)
+                driven = neg(driven)
             for target in terminals[:-1]:
-                self._write_target(scope, target, [value])
+                self._write_target(scope, target, [driven])
             return
 
         operand_bits = [self.eval_expr(t, scope, 1)[0] for t in terminals[1:]]
         if gate == "and":
-            value = self.aig.mk_and_list(operand_bits)
+            driven = self.aig.mk_and_list(operand_bits)
         elif gate == "nand":
-            value = neg(self.aig.mk_and_list(operand_bits))
+            driven = neg(self.aig.mk_and_list(operand_bits))
         elif gate == "or":
-            value = self.aig.mk_or_list(operand_bits)
+            driven = self.aig.mk_or_list(operand_bits)
         elif gate == "nor":
-            value = neg(self.aig.mk_or_list(operand_bits))
+            driven = neg(self.aig.mk_or_list(operand_bits))
         elif gate == "xor":
-            value = self.aig.mk_xor_list(operand_bits)
+            driven = self.aig.mk_xor_list(operand_bits)
         elif gate == "xnor":
-            value = neg(self.aig.mk_xor_list(operand_bits))
+            driven = neg(self.aig.mk_xor_list(operand_bits))
         else:
             raise ElaborationError("unsupported gate primitive %r" % gate)
-        self._write_target(scope, terminals[0], [value])
+        self._write_target(scope, terminals[0], [driven])
 
     def _run_instance(self, driver):
         scope, node = driver.scope, driver.node
@@ -503,8 +495,6 @@ class Elaborator:
                 if signal.bits[pos] is None:
                     signal.bits[pos] = bits[pos]
 
-    # --------------------------------------------------------- expression width
-
     def expr_width(self, expr, scope):
         if isinstance(expr, vast.Const):
             number = expr.number
@@ -545,8 +535,6 @@ class Elaborator:
             return max(self.expr_width(expr.then_expr, scope),
                        self.expr_width(expr.else_expr, scope))
         raise ElaborationError("cannot determine width of %r" % (expr,))
-
-    # ---------------------------------------------------------- expression eval
 
     def eval_expr(self, expr, scope, width=None, env=None):
         """Evaluate `expr` to a list of AIG literals, LSB first."""
@@ -765,9 +753,7 @@ def signal_names_by_node(scopes):
     return names
 
 
-# ---------------------------------------------------------------------------
 # always-block execution
-# ---------------------------------------------------------------------------
 
 class Env:
     """Signal values inside an always block, plus which bits were assigned."""
@@ -783,9 +769,9 @@ class Env:
         signal = self.scope.signal(name)
         if signal is None:
             raise ElaborationError("assignment to undeclared signal %r" % name)
-        entry = ([FALSE] * signal.width, [False] * signal.width)
-        self.values[name] = entry
-        return entry
+        slot = ([FALSE] * signal.width, [False] * signal.width)
+        self.values[name] = slot
+        return slot
 
     def clone(self):
         copy_env = Env(self.scope, self.elaborator)
@@ -926,9 +912,7 @@ def _always_targets(stmt, scope, elaborator):
     return targets
 
 
-# ---------------------------------------------------------------------------
 # bit-vector helpers - all operate on lists of AIG literals, LSB first
-# ---------------------------------------------------------------------------
 
 def _label_care_mask(label, width):
     """Bits of a case label that participate in the comparison.
@@ -966,13 +950,13 @@ def _adder(aig, a, b, carry_in):
     a = _fit(a, width)
     b = _fit(b, width)
     carry = carry_in
-    result = []
+    sum_bits = []
     for i in range(width):
         axb = aig.mk_xor(a[i], b[i])
-        result.append(aig.mk_xor(axb, carry))
+        sum_bits.append(aig.mk_xor(axb, carry))
         # carry_out = majority(a, b, carry)
         carry = aig.mk_or(aig.mk_and(a[i], b[i]), aig.mk_and(axb, carry))
-    return result, carry
+    return sum_bits, carry
 
 
 def _negate(aig, bits):
@@ -1047,9 +1031,7 @@ def _mux_tree(aig, selector, source):
     return current[0] if current else FALSE
 
 
-# ---------------------------------------------------------------------------
 # generate-loop substitution
-# ---------------------------------------------------------------------------
 
 def _substitute(node, genvars, local_names, suffix):
     """Rewrite one unrolled generate iteration.

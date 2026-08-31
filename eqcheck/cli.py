@@ -126,9 +126,9 @@ def build_parser():
     return parser
 
 
-def format_value(entry):
-    width = entry["width"]
-    value = entry["value"]
+def format_value(port):
+    width = port["width"]
+    value = port["value"]
     digits = (width + 3) // 4
     return "%d'h%0*X (%d)" % (width, digits, value, value)
 
@@ -140,15 +140,15 @@ def report_counterexample(printer, miter, counterexample, minimized=None):
 
     care = (minimized or {}).get("by_port")
     for name, _ in miter.input_order:
-        entry = counterexample["inputs"][name]
-        bits = "".join(str(b) for b in reversed(entry["bits"]))
+        port = counterexample["inputs"][name]
+        bits = "".join(str(b) for b in reversed(port["bits"]))
         if care is not None:
             # Mark the bits that actually matter; the rest are don't-cares.
             needed = set(care.get(name, ()))
             bits = "".join(
-                (str(entry["bits"][pos]) if pos in needed else "-")
-                for pos in reversed(range(entry["width"])))
-        printer.line("    %-14s = %-18s %s" % (name, format_value(entry),
+                (str(port["bits"][pos]) if pos in needed else "-")
+                for pos in reversed(range(port["width"])))
+        printer.line("    %-14s = %-18s %s" % (name, format_value(port),
                                                printer.paint("b" + bits, DIM)))
 
     if minimized is not None:
@@ -261,7 +261,6 @@ def run(argv=None):
     results = {}
     verdicts = []
 
-    # ------------------------------------------------------------ algebraic
     if args.method == "algebraic":
         try:
             ports = [x.strip() for x in args.mult_ports.split(",")]
@@ -308,7 +307,6 @@ def run(argv=None):
             return 3
         verdicts.append(result["equivalent"])
 
-    # ------------------------------------------------------------------ SAT
     if args.method in ("sat", "both"):
         result = check_sat(miter, solver_name=args.solver,
                            dimacs_path=args.dimacs,
@@ -354,7 +352,6 @@ def run(argv=None):
                     if key in result["stats"]:
                         printer.field("  " + key, result["stats"][key])
 
-    # ------------------------------------------------------------------ BDD
     bdd_manager_info = None
     if args.method in ("bdd", "both"):
         order, description, extra = resolve_bdd_order(
@@ -421,7 +418,6 @@ def run(argv=None):
                 printer.line("    %-14s bits %s"
                              % (name, ", ".join(str(p) for p in sorted(positions))))
 
-    # ---------------------------------------------------------- localisation
     if args.localize is not None and not equivalent and not args.quiet:
         printer.header("Fault localisation")
         single = localize(args.spec, args.impl, spec_top=args.spec_top,
@@ -469,7 +465,6 @@ def run(argv=None):
                     "fault is guaranteed to be among them, but the ranking "
                     "above is heuristic.", DIM))
 
-    # --------------------------------------------------------------- exports
     exported = {}
     if args.aiger:
         info = export.write_aiger(miter.aig, [miter.root], args.aiger,
@@ -540,27 +535,27 @@ def run(argv=None):
 
 
 def _jsonable_order(extra):
-    out = {}
+    clean = {}
     for key, value in extra.items():
         if isinstance(value, dict):
-            out[key] = {k: v for k, v in value.items() if k != "order"}
+            clean[key] = {k: v for k, v in value.items() if k != "order"}
         elif key != "order":
-            out[key] = value
-    return out
+            clean[key] = value
+    return clean
 
 
 def _jsonable(result):
     if not isinstance(result, dict):
         return result
-    out = {}
+    clean = {}
     for key, value in result.items():
         if key == "stats":
-            out[key] = {str(k): v for k, v in (value or {}).items()}
+            clean[key] = {str(k): v for k, v in (value or {}).items()}
         elif key == "order":
             continue
         else:
-            out[key] = value
-    return out
+            clean[key] = value
+    return clean
 
 
 def main(argv=None):

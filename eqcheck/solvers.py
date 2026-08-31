@@ -71,9 +71,9 @@ def probe(timeout=60):
     working, broken = [], []
     for name in names:
         try:
-            result = subprocess.run([sys.executable, "-c", _PROBE % name],
+            proc = subprocess.run([sys.executable, "-c", _PROBE % name],
                                     capture_output=True, timeout=timeout)
-            ok = result.returncode == 0 and b"ok" in result.stdout
+            ok = proc.returncode == 0 and b"ok" in proc.stdout
         except subprocess.TimeoutExpired:
             ok = False
         (working if ok else broken).append(name)

@@ -38,8 +38,6 @@ FAIL = "FAIL"
 random.seed(20260828)
 
 
-# ---------------------------------------------------------------- golden models
-
 def golden_adder16(v):
     total = v["a"] + v["b"] + v["cin"]
     return {"sum": total & 0xFFFF, "cout": (total >> 16) & 1}
@@ -101,8 +99,6 @@ def golden_c17(v):
     return {"N22": int(not (n10 and n16)), "N23": int(not (n16 and n19))}
 
 
-# --------------------------------------------------------------------- the cases
-
 FRONTEND_CASES = [
     ("adder16_rca.v",      None, golden_adder16),
     ("adder16_cla.v",      None, golden_adder16),
@@ -163,8 +159,6 @@ EQUIV_CASES = [
 
 RANDOM_VECTORS = 400
 
-
-# ------------------------------------------------------------------------ layers
 
 def run_frontend_checks(verbose):
     print("")
@@ -380,7 +374,7 @@ def run_localization_checks(verbose):
     print("   " + "-" * 68)
     failures = 0
 
-    # --- single-fault design: the answer should be exactly one gate ---------
+    # single-fault design: the answer should be exactly one gate
     result = localize("tests/adder16_rca.v", "tests/adder16_rca_buggy1.v")
     names = [c["name"] for c in result["candidates"]]
     ok = names == ["c[10]"]
@@ -391,7 +385,7 @@ def run_localization_checks(verbose):
           % (len(result["candidates"]), result["considered"],
              result["solver_calls"], result["time"]))
 
-    # --- multi-fault design: no single fix, but a verified 4-gate one -------
+    # multi-fault design: no single fix, but a verified 4-gate one
     single = localize("tests/adder16_rca.v", "tests/adder16_cla_buggy.v")
     multi = diagnose("tests/adder16_rca.v", "tests/adder16_cla_buggy.v",
                      max_faults=4, vectors=12, max_sets=4)
@@ -407,7 +401,6 @@ def run_localization_checks(verbose):
         print("        e.g. {%s}"
               % ", ".join(n or "?" for n in verified[0]["names"]))
 
-    # --- an equivalent pair must yield no fix locations at all --------------
     clean = localize("tests/adder16_rca.v", "tests/adder16_cla.v")
     ok = clean["equivalent"] and not clean["candidates"]
     failures += 0 if ok else 1

@@ -22,10 +22,6 @@ def neg(lit):
     return lit ^ 1
 
 
-def negate_if(lit, condition):
-    return lit ^ 1 if condition else lit
-
-
 def node_of(lit):
     return lit >> 1
 
@@ -52,8 +48,6 @@ class AIG:
         self.outputs = []           # list of (name, literal)
         self._next_node = 1
 
-    # ---------------------------------------------------------------- inputs
-
     def new_input(self, name):
         node = self._next_node
         self._next_node += 1
@@ -68,8 +62,6 @@ class AIG:
 
     def add_output(self, name, lit):
         self.outputs.append((name, lit))
-
-    # ----------------------------------------------------------- gate builders
 
     def mk_and(self, a, b):
         # Constant folding first. Carry chains produce a lot of AND(x, 0), so
@@ -165,8 +157,6 @@ class AIG:
             acc = self.mk_xor(acc, x)
         return acc
 
-    # ------------------------------------------------------------- statistics
-
     @property
     def num_ands(self):
         return len(self.and_gates)
@@ -217,21 +207,19 @@ class AIG:
         return best
 
     def stats(self, roots=None):
-        info = {
+        summary = {
             "inputs": self.num_inputs,
             "and_nodes": self.num_ands,
             "outputs": len(self.outputs),
         }
         if roots is not None:
             cone = self.cone(roots)
-            info["cone_nodes"] = sum(1 for n in cone if n in self.and_gates)
-            info["depth"] = self.depth(roots)
-        return info
+            summary["cone_nodes"] = sum(1 for n in cone if n in self.and_gates)
+            summary["depth"] = self.depth(roots)
+        return summary
 
 
-# ---------------------------------------------------------------------------
 # Tseitin transformation
-# ---------------------------------------------------------------------------
 
 class CNF:
     """A DIMACS CNF, plus the AIG-literal -> DIMACS-literal mapping."""

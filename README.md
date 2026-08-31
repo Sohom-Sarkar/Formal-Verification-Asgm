@@ -44,9 +44,9 @@ inconclusive, `4` backends disagree.
 ## How it works
 
 Both designs are parsed, bit-blasted to gates and elaborated into one shared
-AIG. Corresponding outputs are XORed and OR-ed together into a *miter*: a single
-wire that is 1 exactly when the designs disagree. Four stages then try to
-decide it, cheapest first.
+AIG. Corresponding outputs are XORed and OR-ed together into a *miter*: a
+single wire that is 1 exactly when the designs disagree. Four stages then try
+to decide it, cheapest first.
 
 ```
 structural hashing → random simulation → SAT sweeping → Tseitin/CNF → SAT
@@ -74,8 +74,8 @@ the lexer through to elaboration and dropped from the comparison. Treating them
 as zeroes mis-compiles every priority encoder.
 
 Inside `always` blocks the elaborator tracks which bits are assigned on every
-path and warns when one is not, since that is where a synthesiser infers a latch
-and the design is not really combinational.
+path and warns when one is not, since that is where a synthesiser infers a
+latch and the design is not really combinational.
 
 Not supported: sequential logic, division/modulo, `x`/`z` as values, memory
 arrays. All raise explicit errors.
@@ -99,9 +99,9 @@ whose signatures differ cannot be equivalent.
 
 ### SAT sweeping
 
-Kuehlmann & Krohm, DAC 1997. Group nodes by signature, walk in topological order
-rebuilding into a fresh AIG, and ask the solver whether each node matches an
-earlier member of its class. Proved pairs are merged and structural hashing
+Kuehlmann & Krohm, DAC 1997. Group nodes by signature, walk in topological
+order rebuilding into a fresh AIG, and ask the solver whether each node matches
+an earlier member of its class. Proved pairs are merged and structural hashing
 cascades the result upward, so the miter often folds to `FALSE` before the walk
 reaches the outputs.
 
@@ -118,19 +118,19 @@ same wrong guess is not repeated.
 
 ### SAT backend
 
-Tseitin encoding: three clauses and one variable per AND node, linear in circuit
-size. Only the miter cone is encoded. DIMACS variable 1 is pinned false and
-represents the AIG constant, so literals map without special-casing.
+Tseitin encoding: three clauses and one variable per AND node, linear in
+circuit size. Only the miter cone is encoded. DIMACS variable 1 is pinned false
+and represents the AIG constant, so literals map without special-casing.
 
 Default solver is CaDiCaL 1.5.3. `--solver` selects any of the 17 bundled
 solvers that work here; three (`kissat404`, `cryptosat`, `minisatgh`) abort the
 interpreter on construction on this platform and are screened out by
 `solvers.py` with a message rather than a segfault.
 
-`--minimize` shrinks a counterexample to the bits that provoke it. A care set is
-valid when fixing it *forces* the miter to 1, so the test for dropping a bit is
-that `solve([miter = 0] + remaining)` stays UNSAT. On the buggy adder this cuts
-33 bits to 8, which localise to one carry-lookahead block.
+`--minimize` shrinks a counterexample to the bits that provoke it. A care set
+is valid when fixing it *forces* the miter to 1, so the test for dropping a bit
+is that `solve([miter = 0] + remaining)` stays UNSAT. On the buggy adder this
+cuts 33 bits to 8, which localise to one carry-lookahead block.
 
 `--outputs` gives a per-output-bit table with cone size and depth, using one
 incremental solver across all bits.
@@ -157,9 +157,9 @@ and the property becomes
 SPEC = sum 2^i p_i - (sum 2^i a_i)(sum 2^j b_j)
 ```
 
-The circuit is correct iff `SPEC` reduces to zero. Reduction would normally need
-a Gröbner basis, but the gate polynomials already are one when each gate is
-ordered above its inputs, so it degenerates to substitution in reverse
+The circuit is correct iff `SPEC` reduces to zero. Reduction would normally
+need a Gröbner basis, but the gate polynomials already are one when each gate
+is ordered above its inputs, so it degenerates to substitution in reverse
 topological order. Since `x^2 = x`, a monomial is a set of variables and
 multiplication is set union.
 
@@ -168,12 +168,12 @@ multiplication is set union.
 | 12x12 | 11,509 s | **0.034 s** |
 | 64x64 (47,876 gates) | not reachable | **7.6 s** |
 
-This proves each design against the arithmetic specification rather than against
-the other design, so no miter is built.
+This proves each design against the arithmetic specification rather than
+against the other design, so no miter is built.
 
 Proving is cheap, refuting is not: a correct 6x6 multiplier peaks at 186
-polynomial terms, a broken one at 621,004 and 33 s. That is the opposite profile
-to random simulation, so the two complement each other.
+polynomial terms, a broken one at 621,004 and 33 s. That is the opposite
+profile to random simulation, so the two complement each other.
 
 This is the textbook core, not AMulet. There is no adder detection, variable
 elimination or XOR rewriting, so a heavily restructured multiplier can still
@@ -197,8 +197,8 @@ retains every scope.
 
 When several gates are wrong at once, `--localize N` switches to
 counterexample-driven N-fault diagnosis: *k* replicas sharing selector
-variables, each gate cut and freed when its selector is set, `sum(s_n) <= N` via
-cardinality constraints, searching N = 1, 2, … for a minimum-cardinality
+variables, each gate cut and freed when its selector is set, `sum(s_n) <= N`
+via cardinality constraints, searching N = 1, 2, … for a minimum-cardinality
 diagnosis. Each candidate set is verified by enumerating all `2^|S|` forcings.
 
 Two caveats, both reported by the tool. Many gate sets can repair a design, so
@@ -216,19 +216,19 @@ always valid and always useless, so those are ranked last.
 `run_tests.py` runs 54 checks in seven layers:
 
 1. **Frontend.** Each of 18 designs simulated alone against an independent
-   Python model, exhaustively where the input space allows. Catches frontend
-   bugs that would otherwise cancel out between the two designs.
+Python model, exhaustively where the input space allows. Catches frontend bugs
+that would otherwise cancel out between the two designs.
 2. **Equivalence.** Each pair against its expected verdict, SAT and BDD required
-   to agree.
+to agree.
 3. **Witness replay.** Every counterexample re-simulated through both designs.
 4. **Care set.** 200 random completions of each minimised counterexample must
-   still expose the bug.
+still expose the bug.
 5. **Engine cross-checks.** Sweeping, plain miter and per-output analysis must
-   agree.
+agree.
 6. **Localisation.** For designs with a planted fault, diagnosis must name the
-   gate that was broken.
+gate that was broken.
 7. **Algebraic.** Must prove genuine multipliers and refuse to prove four
-   deliberately corrupted ones.
+deliberately corrupted ones.
 
 `fuzz.py` generates random circuits, rewrites them with semantics-preserving
 transformations, mutates them, and grades the checker against exhaustive
@@ -236,16 +236,16 @@ simulation. More than 1,500 rounds across eight seeds during development, zero
 disagreements. Around 4% of mutations turn out to be behaviour-preserving by
 accident and are correctly reported equivalent.
 
-Its first run found a real bug, in one of the rewrite rules, where
-`~{2'd0, (c == 0)}` was used to invert a mux condition. A bitwise complement of
-a widened comparison is never zero, so the condition was always true.
+Its first run found a real bug, in one of the rewrite rules, where `~{2'd0, (c
+== 0)}` was used to invert a mux condition. A bitwise complement of a widened
+comparison is never zero, so the condition was always true.
 
 ## Test cases
 
 Fourteen pairs, each a different topology rather than a cosmetic edit. Measured
-complexity for all of them is tabulated in [REPORT.md](REPORT.md); the largest are a
-128-bit adder comparison (257 inputs, 3,097 miter gates, `2^257` input space)
-and a 12x12 multiplier that takes over three hours of SAT search.
+complexity for all of them is tabulated in [REPORT.md](REPORT.md); the largest
+are a 128-bit adder comparison (257 inputs, 3,097 miter gates, `2^257` input
+space) and a 12x12 multiplier that takes over three hours of SAT search.
 
 | # | Reference | Revision | Expected |
 |---|-----------|----------|----------|
@@ -275,14 +275,14 @@ Tables in [results/benchmark.md](results/benchmark.md), regenerated by
 `benchmark.py`.
 
 **BDDs hit a wall, SAT bends.** Multiplier BDD size roughly triples per added
-bit and blows a 400,000-node budget at width 9, where SAT still finishes in
-33 s. Bryant's 1991 result: multiplier BDDs are exponential in every order.
+bit and blows a 400,000-node budget at width 9, where SAT still finishes in 33
+s. Bryant's 1991 result: multiplier BDDs are exponential in every order.
 
 **SAT sweeping has a crossover.** It discharges eight of nine pairs entirely
 bottom-up, but at widths 8–9 its overhead exceeds what the merges save (0.94x,
-0.71x). At width 12 it wins 3.57x, 3,227 s against 11,509 s, from only 21 merges
-in a 2,645-node cone. It changes the shape of the curve on hard instances rather
-than helping easy ones.
+0.71x). At width 12 it wins 3.57x, 3,227 s against 11,509 s, from only 21
+merges in a 2,645-node cone. It changes the shape of the curve on hard
+instances rather than helping easy ones.
 
 **No BDD ordering heuristic wins everywhere.** DFS peaks at 843 nodes on the
 16-bit adder against interleaved's 4,557, but is the worst of the four on the

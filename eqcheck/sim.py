@@ -61,11 +61,11 @@ class Simulator:
             node_value[node] = (lit_value(gate[0]) and lit_value(gate[1])
                                 if gate else False)
 
-        result = {}
+        outputs = {}
         for name, _, bits in self.outputs:
             out = 0
             for pos, lit in enumerate(bits):
                 if lit_value(lit):
                     out |= 1 << pos
-            result[name] = out
-        return result
+            outputs[name] = out
+        return outputs

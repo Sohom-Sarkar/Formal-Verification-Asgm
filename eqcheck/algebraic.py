@@ -55,16 +55,16 @@ def poly_add(target, source, scale=1):
 
 def poly_mul(left, right):
     """Multiply two polynomials. Monomial product is set union, since x^2 = x."""
-    result = {}
+    product = {}
     for lm, lc in left.items():
         for rm, rc in right.items():
             monomial = lm | rm
-            total = result.get(monomial, 0) + lc * rc
+            total = product.get(monomial, 0) + lc * rc
             if total:
-                result[monomial] = total
-            elif monomial in result:
-                del result[monomial]
-    return result
+                product[monomial] = total
+            elif monomial in product:
+                del product[monomial]
+    return product
 
 
 def literal_poly(lit):

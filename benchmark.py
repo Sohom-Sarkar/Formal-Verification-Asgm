@@ -23,8 +23,6 @@ from eqcheck.bigstack import run as run_big_stack
 BDD_NODE_LIMIT = 400_000
 
 
-# ---------------------------------------------------------------------------
-
 def experiment_scaling(report, max_width):
     report.section(
         "A. Scaling: multiplier width vs SAT, SAT sweeping, and BDD",
@@ -232,8 +230,6 @@ def experiment_width(report):
 
     report.table(header, rows)
 
-
-# ---------------------------------------------------------------------------
 
 class Report:
     def __init__(self, path):

@@ -415,16 +415,16 @@ def diagnose(spec_path, impl_path, spec_top=None, impl_top=None,
 
     results = []
     for chosen in found_sets:
-        entry = {
+        diagnosis = {
             "nodes": chosen,
             "names": [impl.names.get(n) for n in chosen],
             "size": len(chosen),
             "at_outputs": sum(1 for n in chosen if n in output_nodes),
         }
         if verify and len(chosen) <= 4:
-            entry["verified"] = verify_fix_set(spec, impl, shared, chosen,
+            diagnosis["verified"] = verify_fix_set(spec, impl, shared, chosen,
                                                solver_name=solver_name)
-        results.append(entry)
+        results.append(diagnosis)
 
     return {
         "equivalent": False,

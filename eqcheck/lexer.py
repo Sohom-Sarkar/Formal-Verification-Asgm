@@ -73,8 +73,8 @@ def _parse_sized(match):
     base = {"b": 2, "o": 8, "d": 10, "h": 16}[base_char]
     bits_per_digit = _BASE_BITS[base_char]
 
-    # Build the don't-care mask digit by digit, from the least significant end,
-    # then substitute 0 for the wildcard digits to get the numeric value.
+    # Mask built digit by digit from the LSB end, then wildcards zeroed out
+    # to get the numeric value.
     xz_mask = 0
     if bits_per_digit:
         for position, digit in enumerate(reversed(digits)):

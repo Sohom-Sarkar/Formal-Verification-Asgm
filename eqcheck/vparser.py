@@ -33,8 +33,6 @@ class Parser:
         self.tokens = tokenize(text)
         self.pos = 0
 
-    # ------------------------------------------------------------ utilities
-
     @property
     def current(self):
         return self.tokens[self.pos]
@@ -77,8 +75,6 @@ class Parser:
                 "line %d: expected identifier, found %r" % (token.line, token.value))
         self.pos += 1
         return token.value
-
-    # -------------------------------------------------------------- top level
 
     def parse(self):
         modules = []
@@ -126,12 +122,12 @@ class Parser:
         while not self.at("endmodule"):
             if self.current.kind == "eof":
                 raise VerilogSyntaxError("unexpected end of file in module %s" % name)
-            item = self.parse_item()
-            if item is not None:
-                if isinstance(item, list):
-                    items.extend(item)
+            member = self.parse_item()
+            if member is not None:
+                if isinstance(member, list):
+                    items.extend(member)
                 else:
-                    items.append(item)
+                    items.append(member)
         self.expect("endmodule")
 
         return vast.Module(name=name, params=params, ports=ports, items=items)
@@ -156,8 +152,6 @@ class Parser:
             names.append(self.expect_id())
         return vast.Decl(direction=direction, kind=kind, msb=msb, lsb=lsb,
                          names=names, signed=signed)
-
-    # ------------------------------------------------------------ module items
 
     def parse_item(self):
         token = self.current
@@ -358,17 +352,17 @@ class Parser:
                 self.expect_id()
             items = []
             while not self.at("end"):
-                item = self.parse_item()
-                if item is not None:
-                    if isinstance(item, list):
-                        items.extend(item)
+                member = self.parse_item()
+                if member is not None:
+                    if isinstance(member, list):
+                        items.extend(member)
                     else:
-                        items.append(item)
+                        items.append(member)
             self.expect("end")
             body = vast.GenerateBlock(items=items)
         else:
-            item = self.parse_item()
-            body = vast.GenerateBlock(items=item if isinstance(item, list) else [item])
+            member = self.parse_item()
+            body = vast.GenerateBlock(items=member if isinstance(member, list) else [member])
 
         return vast.For(var=var, start=start, cond=cond, step=step, body=body)
 
@@ -390,18 +384,16 @@ class Parser:
                 self.expect_id()
             items = []
             while not self.at("end"):
-                item = self.parse_item()
-                if item is not None:
-                    if isinstance(item, list):
-                        items.extend(item)
+                member = self.parse_item()
+                if member is not None:
+                    if isinstance(member, list):
+                        items.extend(member)
                     else:
-                        items.append(item)
+                        items.append(member)
             self.expect("end")
             return vast.GenerateBlock(items=items)
-        item = self.parse_item()
-        return vast.GenerateBlock(items=item if isinstance(item, list) else [item])
-
-    # ------------------------------------------------------------------ always
+        member = self.parse_item()
+        return vast.GenerateBlock(items=member if isinstance(member, list) else [member])
 
     def parse_always(self):
         self.expect("always")
@@ -498,8 +490,6 @@ class Parser:
         expr = self.parse_expr()
         self.expect(";")
         return vast.BlockingAssign(target=target, expr=expr)
-
-    # -------------------------------------------------------------- expressions
 
     def parse_expr(self):
         return self.parse_ternary()

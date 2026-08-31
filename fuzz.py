@@ -33,9 +33,7 @@ from eqcheck.lexer import VerilogSyntaxError
 from eqcheck.sim import Simulator
 from eqcheck.bigstack import run as run_big_stack
 
-# ---------------------------------------------------------------------------
 # expression trees
-# ---------------------------------------------------------------------------
 
 BIN_OPS = ["&", "|", "^", "+", "-"]
 BIN_OPS_RARE = ["*"]
@@ -95,9 +93,7 @@ def emit(node, width):
     raise AssertionError(kind)
 
 
-# ---------------------------------------------------------------------------
 # semantics-preserving rewrites  (A -> B)
-# ---------------------------------------------------------------------------
 
 def rewrite(node, rng, probability=0.45):
     """Rewrite an expression without changing what it computes."""
@@ -184,9 +180,7 @@ def _maybe_wrap(node, rng, probability):
     return ("bin", "+", node, ("const", 0))
 
 
-# ---------------------------------------------------------------------------
 # bug injection  (A -> C)
-# ---------------------------------------------------------------------------
 
 SWAPS = {"&": "|", "|": "&", "^": "&", "+": "-", "-": "+", "*": "+"}
 CMP_SWAPS = {"<": ">", ">": "<", "==": "<"}
@@ -244,9 +238,7 @@ def corrupt(n, rng):
     return n
 
 
-# ---------------------------------------------------------------------------
 # Verilog emission
-# ---------------------------------------------------------------------------
 
 def emit_module(name, inputs, width, exprs):
     lines = ["module %s(" % name]
@@ -260,9 +252,7 @@ def emit_module(name, inputs, width, exprs):
     return "\n".join(lines) + "\n"
 
 
-# ---------------------------------------------------------------------------
 # ground truth
-# ---------------------------------------------------------------------------
 
 def all_vectors(inputs, width):
     space = range(1 << width)
@@ -278,9 +268,7 @@ def designs_differ(sim_a, sim_b, inputs, width):
     return False, None
 
 
-# ---------------------------------------------------------------------------
 # one fuzz round
-# ---------------------------------------------------------------------------
 
 class Failure(Exception):
     pass
@@ -311,7 +299,7 @@ def fuzz_round(rng, width, num_inputs, num_outputs, depth, verbose=False):
 
     findings = []
 
-    # --- A vs B: rewrites must preserve behaviour --------------------------
+    # A vs B: rewrites must preserve behaviour
     differ, witness = designs_differ(sim_a, sim_b, inputs, width)
     if differ:
         raise Failure(
@@ -327,7 +315,7 @@ def fuzz_round(rng, width, num_inputs, num_outputs, depth, verbose=False):
             % (src_a, src_b))
     findings.append(("A-vs-B", "equivalent", result["resolved_by"]))
 
-    # --- A vs C: the mutant, whatever ground truth says --------------------
+    # A vs C: the mutant, whatever ground truth says
     if changed_any:
         differ_c, witness_c = designs_differ(sim_a, sim_c, inputs, width)
         miter_c = build_miter(None, None, spec_text=src_a, impl_text=src_c)

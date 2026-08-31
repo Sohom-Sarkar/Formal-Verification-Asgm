@@ -26,7 +26,6 @@ class ParallelSim:
             self.patterns[node] = self.rng.getrandbits(num_vectors) & self.mask
         self._signatures = None
 
-
     def add_vectors(self, assignments):
         """Append specific input vectors, e.g. counterexamples from the solver.
 
@@ -45,7 +44,6 @@ class ParallelSim:
         self.num_vectors += added
         self.mask = (1 << self.num_vectors) - 1
         self._signatures = None
-
 
     def signatures(self, order=None, roots=None):
         """Signature for every node in the cone, computed in topological order."""
@@ -80,7 +78,6 @@ class ParallelSim:
 
     def lit_signature(self, sigs, lit):
         return self._lit_sig(sigs, lit)
-
 
     def extract_vector(self, index):
         """Input assignment for random vector `index`, as {input node -> bool}."""

@@ -100,8 +100,8 @@ def build_miter(spec_path, impl_path, spec_top=None, impl_top=None,
     miter = Miter()
     miter.input_order = spec_inputs
 
-    # One shared set of primary inputs feeds both designs - this is what makes
-    # the XOR of their outputs meaningful.
+    # Both designs hang off one set of primary inputs; that is what makes the
+    # output XOR mean anything.
     for name, width in spec_inputs:
         miter.input_bits[name] = [miter.aig.new_input("%s[%d]" % (name, pos))
                                   for pos in range(width)]
@@ -140,15 +140,15 @@ def _infer_top(modules):
     for module in modules:
         stack = list(module.items)
         while stack:
-            item = stack.pop()
-            if isinstance(item, vast.ModuleInst):
-                instantiated.add(item.module_name)
-            elif isinstance(item, vast.GenerateBlock):
-                stack.extend(item.items)
-            elif isinstance(item, vast.For):
-                stack.append(item.body)
-            elif isinstance(item, vast.If):
-                stack.extend(x for x in (item.then_body, item.else_body) if x)
+            member = stack.pop()
+            if isinstance(member, vast.ModuleInst):
+                instantiated.add(member.module_name)
+            elif isinstance(member, vast.GenerateBlock):
+                stack.extend(member.items)
+            elif isinstance(member, vast.For):
+                stack.append(member.body)
+            elif isinstance(member, vast.If):
+                stack.extend(x for x in (member.then_body, member.else_body) if x)
     candidates = [m.name for m in modules if m.name not in instantiated]
     if len(candidates) == 1:
         return candidates[0]
@@ -175,9 +175,7 @@ def _check_ports(left, right, kind, spec_top, impl_top):
                 % (kind, name, left_map[name], spec_top, right_map[name], impl_top))
 
 
-# ---------------------------------------------------------------------------
 # SAT backend
-# ---------------------------------------------------------------------------
 
 def random_simulation(miter, num_vectors=512, seed=0x5EED):
     """Try to refute equivalence by simulation before calling a solver.
@@ -212,7 +210,7 @@ def check_sat(miter, solver_name=DEFAULT_SOLVER, dimacs_path=None,
     """
     from pysat.solvers import Solver
 
-    result = {
+    report = {
         "method": "sat", "solver": solver_name, "equivalent": None,
         "variables": 0, "clauses": 0, "encode_time": 0.0, "solve_time": 0.0,
         "stats": {}, "counterexample": None, "resolved_by": None,
@@ -221,22 +219,22 @@ def check_sat(miter, solver_name=DEFAULT_SOLVER, dimacs_path=None,
 
     # Stage 1: structural hashing may already have folded the miter away.
     if miter.root == FALSE:
-        result.update(equivalent=True, resolved_by="structural-hashing",
+        report.update(equivalent=True, resolved_by="structural-hashing",
                       trivial="structural-hashing")
-        return result
+        return report
 
     # Stage 2: cheap random simulation.
     if presimulate:
         simulation = random_simulation(miter, num_vectors=sim_vectors)
-        result["simulation"] = {k: v for k, v in simulation.items()
+        report["simulation"] = {k: v for k, v in simulation.items()
                                 if k != "counterexample"}
         if simulation["falsified"]:
-            result.update(equivalent=False, resolved_by="random-simulation",
+            report.update(equivalent=False, resolved_by="random-simulation",
                           counterexample=simulation["counterexample"])
             if minimize:
-                result["minimized"] = minimize_counterexample(
-                    miter, result["counterexample"], solver_name=solver_name)
-            return result
+                report["minimized"] = minimize_counterexample(
+                    miter, report["counterexample"], solver_name=solver_name)
+            return report
 
     # Stage 3: SAT sweeping merges provable internal equivalences.
     target_aig, target_root = miter.aig, miter.root
@@ -244,10 +242,10 @@ def check_sat(miter, solver_name=DEFAULT_SOLVER, dimacs_path=None,
     if sweep:
         swept = sat_sweep(miter.aig, miter.root, num_vectors=sweep_vectors,
                           solver_name=solver_name)
-        result["sweep"] = dict(swept.stats)
+        report["sweep"] = dict(swept.stats)
         if swept.root == FALSE:
-            result.update(equivalent=True, resolved_by="sat-sweeping")
-            return result
+            report.update(equivalent=True, resolved_by="sat-sweeping")
+            return report
         target_aig, target_root = swept.aig, swept.root
         input_map = swept.input_map     # counterexamples now speak about the
                                         # rebuilt graph, so map back below
@@ -256,7 +254,7 @@ def check_sat(miter, solver_name=DEFAULT_SOLVER, dimacs_path=None,
     encode_start = time.perf_counter()
     cnf, var_of_node, dimacs = tseitin(target_aig, [target_root])
     cnf.add(dimacs(target_root))
-    result["encode_time"] = time.perf_counter() - encode_start
+    report["encode_time"] = time.perf_counter() - encode_start
 
     if dimacs_path:
         cnf.to_dimacs(dimacs_path)
@@ -269,9 +267,9 @@ def check_sat(miter, solver_name=DEFAULT_SOLVER, dimacs_path=None,
             stats = dict(solver.accum_stats())
         except Exception:
             stats = {}
-    result["solve_time"] = time.perf_counter() - solve_start
+    report["solve_time"] = time.perf_counter() - solve_start
 
-    result.update(variables=cnf.num_vars, clauses=len(cnf.clauses), stats=stats,
+    report.update(variables=cnf.num_vars, clauses=len(cnf.clauses), stats=stats,
                   equivalent=not satisfiable,
                   resolved_by="sat-sweeping+sat" if sweep else "sat")
 
@@ -289,13 +287,13 @@ def check_sat(miter, solver_name=DEFAULT_SOLVER, dimacs_path=None,
                 raw = assignment.get(var_of_node.get(node_of(lit)), False)
                 return raw ^ bool(is_inverted(lit))
 
-        result["counterexample"] = _decode_counterexample(miter, value_of)
+        report["counterexample"] = _decode_counterexample(miter, value_of)
 
         if minimize:
-            result["minimized"] = minimize_counterexample(
-                miter, result["counterexample"], solver_name=solver_name)
+            report["minimized"] = minimize_counterexample(
+                miter, report["counterexample"], solver_name=solver_name)
 
-    return result
+    return report
 
 
 def minimize_counterexample(miter, counterexample, solver_name=DEFAULT_SOLVER):
@@ -317,10 +315,10 @@ def minimize_counterexample(miter, counterexample, solver_name=DEFAULT_SOLVER):
 
     fixed = {}
     for name, width in miter.input_order:
-        entry = counterexample["inputs"][name]
+        port_bits = counterexample["inputs"][name]
         for pos, lit in enumerate(miter.input_bits[name]):
             literal = encoder.dimacs(lit)
-            fixed[(name, pos)] = literal if entry["bits"][pos] else -literal
+            fixed[(name, pos)] = literal if port_bits["bits"][pos] else -literal
 
     free = set()
     for key in list(fixed):
@@ -411,9 +409,7 @@ def simulate(miter, input_values):
     return result
 
 
-# ---------------------------------------------------------------------------
 # BDD backend
-# ---------------------------------------------------------------------------
 
 def check_bdd(miter, order=None, node_limit=2_000_000):
     """Decide equivalence by building the miter's ROBDD.
@@ -443,7 +439,7 @@ def check_bdd(miter, order=None, node_limit=2_000_000):
     build_time = time.perf_counter() - start
 
     root = roots[0]
-    result = {
+    report = {
         "method": "bdd",
         "equivalent": root == 0,
         "aborted": False,
@@ -461,9 +457,9 @@ def check_bdd(miter, order=None, node_limit=2_000_000):
             node = level_to_node.get(level)
             if node is not None:
                 node_true[node] = value
-        result["counterexample"] = _decode_counterexample(
+        report["counterexample"] = _decode_counterexample(
             miter, lambda node: node_true.get(node, False))
-    return result
+    return report
 
 
 def interleaved_order(miter):
@@ -626,9 +622,7 @@ def sift_order(miter, initial=None, max_builds=160, node_limit=200_000,
     }
 
 
-# ---------------------------------------------------------------------------
 # per-output diagnosis
-# ---------------------------------------------------------------------------
 
 def analyze_outputs(miter, solver_name=DEFAULT_SOLVER):
     """Per-output-bit verdict, cone size and depth.
@@ -645,19 +639,19 @@ def analyze_outputs(miter, solver_name=DEFAULT_SOLVER):
             spec_bits = miter.designs[0].output_map[name]
             impl_bits = miter.designs[1].output_map[name]
             cone = miter.aig.cone([spec_bits[pos], impl_bits[pos]])
-            entry = {
+            row = {
                 "output": name,
                 "bit": pos,
                 "cone_nodes": sum(1 for n in cone if n in miter.aig.and_gates),
                 "depth": miter.aig.depth([spec_bits[pos], impl_bits[pos]]),
             }
             if xor_lit == FALSE:
-                entry.update(differs=False, proved_by="structural-hashing")
+                row.update(differs=False, proved_by="structural-hashing")
             else:
                 sat, _model = encoder.satisfiable(xor_lit)
-                entry.update(differs=bool(sat),
+                row.update(differs=bool(sat),
                              proved_by="sat" if not sat else None)
-            rows.append(entry)
+            rows.append(row)
 
     calls = encoder.calls
     encoder.close()

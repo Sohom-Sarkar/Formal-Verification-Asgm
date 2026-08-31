@@ -37,7 +37,6 @@ class BDD:
         self._ite_cache = {}
         self.peak_nodes = 0
 
-
     def make_node(self, level, low, high):
         if low == high:
             return low                              # rule 1
@@ -61,7 +60,6 @@ class BDD:
         if node <= 1:
             return self.num_vars                    # terminals sit below all
         return self.nodes[node][0]
-
 
     def ite(self, f, g, h):
         """if-then-else: the single primitive every other operation builds on."""
@@ -87,10 +85,10 @@ class BDD:
 
         low = self.ite(fl, gl, hl)
         high = self.ite(fh, gh, hh)
-        result = self.make_node(top, low, high)
+        merged = self.make_node(top, low, high)
 
-        self._ite_cache[key] = result
-        return result
+        self._ite_cache[key] = merged
+        return merged
 
     def _cofactors(self, node, level):
         """Split `node` on `level`; if it does not test that level it is its own
@@ -113,7 +111,6 @@ class BDD:
 
     def apply_not(self, a):
         return self.ite(a, FALSE, TRUE)
-
 
     def count_nodes(self, roots):
         """Live node count reachable from `roots` (excludes terminals)."""

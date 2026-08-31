@@ -257,11 +257,11 @@ def sat_sweep(aig, root, num_vectors=192, solver_name=DEFAULT_SOLVER,
 
     encoder.close()
 
-    result = SweepResult()
-    result.aig = new
-    result.root = new_root
-    result.input_map = input_map
-    result.stats = {
+    swept = SweepResult()
+    swept.aig = new
+    swept.root = new_root
+    swept.input_map = input_map
+    swept.stats = {
         "nodes_before": len(aig.and_gates),
         "cone_before": sum(1 for n in order if n in aig.and_gates),
         "nodes_after": new.num_ands,
@@ -276,4 +276,4 @@ def sat_sweep(aig, root, num_vectors=192, solver_name=DEFAULT_SOLVER,
         "proved_by_sweeping": proved_by_sweeping,
         "time": time.perf_counter() - started,
     }
-    return result
+    return swept
